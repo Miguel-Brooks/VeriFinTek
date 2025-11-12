@@ -25,7 +25,9 @@ SECRET_KEY = 'django-insecure--g8)95i4*d99j=f-i!+46!jy19ujd6s3mvj13$rxa6gk=h-v_d
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['accountantverifintek.pythonanywhere.com', '127.0.0.1']
+CSRF_TRUSTED_ORIGINS = ['https://accountantverifintek.pythonanywhere.com']
+
 
 
 # Application definition
@@ -114,7 +116,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'                 
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Carpeta de salida para collectstatic
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
