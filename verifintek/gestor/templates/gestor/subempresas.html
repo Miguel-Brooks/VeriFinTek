@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIGEC | Sub-Empresas</title>
+    <link rel="stylesheet" href="{% static 'gestor/style.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo-section">SIGEC Verifintek</div>
+            
+            <a href="{% url 'panel_general' %}" class="nav-link">
+                <i class="fas fa-chart-line"></i> <span>Panel General</span>
+            </a>
+            <a href="{% url 'subempresas' %}" class="nav-link active">
+                <i class="fas fa-building"></i> <span>Sub-Empresas</span>
+            </a>
+            <a href="{% url 'captura' %}" class="nav-link">
+                <i class="fas fa-file-invoice-dollar"></i> <span>Captura Financiera</span>
+            </a>
+            <a href="{% url 'flujo' %}" class="nav-link">
+                <i class="fas fa-sync-alt"></i> <span>Flujo de Aprobación</span>
+            </a>
+            <a href="{% url 'balance' %}" class="nav-link">
+                <i class="fas fa-balance-scale"></i> <span>Balance Consolidado</span>
+            </a>
+
+            <div class="user-profile">
+                <strong>Diego Del Razo</strong>
+                <small>Administrador</small>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2>Gestión de Sub-Empresas</h2>
+                    <p>Administra las empresas del grupo de forma centralizada.</p>
+                </div>
+                <a href="#" class="btn btn-primary"><i class="fas fa-plus"></i> Nueva Sub-Empresa</a>
+            </div>
+
+            <div class="metric-grid">
+                <div class="card">
+                    <h3>Total Sub-Empresas</h3>
+                    <div class="value">{{ subempresas|length }}</div>
+                </div>
+                <div class="card">
+                    <h3>Empresas Activas</h3>
+                    <div class="value" style="color: var(--color-accent-green);">10</div>
+                </div>
+                <div class="card">
+                    <h3>Balance Total Consolidado</h3>
+                    <div class="value" style="color: var(--color-primary-blue);">$2.4M</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Listado Detallado</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Área</th>
+                                <th>Estado</th>
+                                <th>Empleados</th>
+                                <th>Balance ($)</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in subempresas %}
+                            <tr>
+                                <td>{{ s.nombre }}</td>
+                                <td>{{ s.area }}</td>
+                                <td>
+                                    {% if s.estado == 'activa' %}
+                                        <span class="status-tag status-active">Activo</span>
+                                    {% else %}
+                                        <span class="status-tag status-inactive">Inactivo</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ s.empleados }}</td>
+                                <td>{{ s.balance }}</td>
+                                <td>
+                                    <i class="fas fa-eye" style="color: var(--color-primary-blue); cursor: pointer;"></i>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6">No hay sub-empresas registradas.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</body>
+</html>
