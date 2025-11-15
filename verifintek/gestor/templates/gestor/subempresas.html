@@ -29,7 +29,7 @@
             <a href="{% url 'balance' %}" class="nav-link">
                 <i class="fas fa-balance-scale"></i> <span>Balance Consolidado</span>
             </a>
-
+            
             <div class="user-profile">
                 <strong>Diego Del Razo</strong>
                 <small>Administrador</small>
@@ -42,7 +42,10 @@
                     <h2>Gestión de Sub-Empresas</h2>
                     <p>Administra las empresas del grupo de forma centralizada.</p>
                 </div>
-                <a href="#" class="btn btn-primary"><i class="fas fa-plus"></i> Nueva Sub-Empresa</a>
+                <a href="{% url 'subempresa_nueva' %}" class="btn btn-primary btn-add"> 
+                    <i class="fas fa-plus"></i> Nueva Sub-Empresa
+                </a>
+                
             </div>
 
             <div class="metric-grid">
@@ -52,11 +55,11 @@
                 </div>
                 <div class="card">
                     <h3>Empresas Activas</h3>
-                    <div class="value" style="color: var(--color-accent-green);">10</div>
+                    <div class="value" style="color: var(--color-accent-green);">{{ empresas_activas }}</div>
                 </div>
                 <div class="card">
                     <h3>Balance Total Consolidado</h3>
-                    <div class="value" style="color: var(--color-primary-blue);">$2.4M</div>
+                    <div class="value" style="color: var(--color-primary-blue);">${{ balance_total|floatformat:2 }}</div>
                 </div>
             </div>
 
@@ -88,8 +91,13 @@
                                 </td>
                                 <td>{{ s.empleados }}</td>
                                 <td>{{ s.balance }}</td>
-                                <td>
-                                    <i class="fas fa-eye" style="color: var(--color-primary-blue); cursor: pointer;"></i>
+                                <td class="acciones">
+                                    <a href="#" class="action-icon">
+                                        <i class="fas fa-eye" > </i>
+                                    </a>
+                                    <a href="#" class="action-icon">
+                                        <i class="fas fa-edit" ></i>
+                                    </a>
                                 </td>
                             </tr>
                             {% empty %}
