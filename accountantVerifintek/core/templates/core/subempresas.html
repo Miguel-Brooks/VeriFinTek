@@ -1,0 +1,85 @@
+{% extends "core/base.html" %}
+
+{% block title %}SIGEC | Sub-Empresas{% endblock %}
+
+{% block header %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h2>Gestión de Sub-Empresas</h2>
+        <p>Administra las empresas del grupo de forma centralizada.</p>
+    </div>
+    <a href="#" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Nueva Sub-Empresa
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="metric-grid">
+    <div class="card">
+        <h3>Total Sub-Empresas</h3>
+        <div class="value">12</div>
+    </div>
+    <div class="card">
+        <h3>Empresas Activas</h3>
+        <div class="value" style="color: var(--color-accent-green);">10</div>
+    </div>
+    <div class="card">
+        <h3>Balance Total Consolidado</h3>
+        <div class="value" style="color: var(--color-primary-blue);">$2.4M</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Listado Detallado</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Área</th>
+                <th>Estado</th>
+                <th>Empleados</th>
+                <th>Balance ($)</th>
+                <th>Acciones</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Marketing Digital S.A.</td>
+                <td>Marketing</td>
+                <td><span class="status-tag status-active">Activo</span></td>
+                <td>45</td>
+                <td>450,000</td>
+                <td>
+                    <i class="fas fa-eye" style="color: var(--color-text-light); cursor: pointer;"></i>
+                    <i class="fas fa-edit" style="color: var(--color-primary-blue); margin-left: 10px; cursor: pointer;"></i>
+                </td>
+            </tr>
+            <tr>
+                <td>Desarrollo Tech</td>
+                <td>Desarrollo</td>
+                <td><span class="status-tag status-active">Activo</span></td>
+                <td>32</td>
+                <td>680,000</td>
+                <td>
+                    <i class="fas fa-eye" style="color: var(--color-text-light); cursor: pointer;"></i>
+                    <i class="fas fa-edit" style="color: var(--color-primary-blue); margin-left: 10px; cursor: pointer;"></i>
+                </td>
+            </tr>
+            <tr>
+                <td>Soluciones Cloud</td>
+                <td>Desarrollo</td>
+                <td><span class="status-tag status-inactive">Inactivo</span></td>
+                <td>20</td>
+                <td>150,000</td>
+                <td>
+                    <i class="fas fa-eye" style="color: var(--color-text-light); cursor: pointer;"></i>
+                    <i class="fas fa-edit" style="color: var(--color-primary-blue); margin-left: 10px; cursor: pointer;"></i>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
