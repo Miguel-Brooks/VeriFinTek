@@ -1,0 +1,64 @@
+{% extends "core/base.html" %}
+
+{% block title %}SIGEC | Panel General{% endblock %}
+
+{% block header %}
+<h2>Panel General</h2>
+<p>Resumen del sistema de gestión empresarial en tiempo real.</p>
+{% endblock %}
+
+{% block content %}
+<div class="metric-grid">
+    <div class="card">
+        <h3>Sub-Empresas Activas</h3>
+        <div class="value">12</div>
+    </div>
+    <div class="card">
+        <h3>Reportes Aprobados (Mes)</h3>
+        <div class="value" style="color: var(--color-accent-green);">45</div>
+    </div>
+    <div class="card">
+        <h3>Pendientes de Revisión</h3>
+        <div class="value" style="color: var(--color-warning-yellow);">8</div>
+    </div>
+    <div class="card">
+        <h3>Balance Total</h3>
+        <div class="value" style="color: var(--color-primary-blue);">$2.4M</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 40px;">
+    <h3>Acciones Rápidas</h3>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{% url 'core:captura' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Nueva Captura Financiera
+        </a>
+        <a href="{% url 'core:balance' %}" class="btn"
+           style="background-color: #F3F4F6; color: var(--color-text-dark);">
+            <i class="fas fa-chart-area"></i> Generar Balance Consolidado
+        </a>
+        <a href="{% url 'core:subempresas' %}" class="btn"
+           style="background-color: #F3F4F6; color: var(--color-text-dark);">
+            <i class="fas fa-cog"></i> Gestionar Sub-Empresas
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Aprobaciones Pendientes</h3>
+    <div class="flow-item">
+        <div class="flow-details">
+            <h4>Marketing Digital S.A. - Balance Mensual</h4>
+            <p>Capturado por: Roberto Aburto</p>
+        </div>
+        <span class="status-tag status-revision">En Revisión</span>
+    </div>
+    <div class="flow-item" style="border-left-color: var(--color-warning-yellow);">
+        <div class="flow-details">
+            <h4>Desarrollo Tech - Flujo de Efectivo</h4>
+            <p>Capturado por: Ceci</p>
+        </div>
+        <span class="status-tag status-revision" style="background-color: #FDE68A;">Pendiente</span>
+    </div>
+</div>
+{% endblock %}

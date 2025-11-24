@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+
+{% block title %}Iniciar sesión{% endblock %}
+
+{% block sidebar %}{% endblock %}
+
+{% block header %}
+<h2>Iniciar sesión</h2>
+<p>Accede a tu panel financiero.</p>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="">
+    {% csrf_token %}
+    <label for="id_username">Usuario:</label>
+    <input type="text" name="username" id="id_username" required>
+
+    <label for="id_password">Contraseña:</label>
+    <input type="password" name="password" id="id_password" required>
+
+    <button type="submit" class="btn btn-primary">Entrar</button>
+</form>
+
+<p>
+    ¿Eres admin? <a href="/admin/login/">Ir al login de administrador</a>
+</p>
+{% endblock %}
