@@ -1,0 +1,70 @@
+{% extends "core/base.html" %}
+
+{% block title %}SIGEC | Captura Financiera{% endblock %}
+
+{% block header %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h2>Captura Financiera</h2>
+        <p>Registra la información financiera de las sub-empresas.</p>
+    </div>
+    <a href="#" class="btn" style="background-color: var(--color-text-dark); color: white;">
+        <i class="fas fa-file-pdf"></i> Exportar PDF
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="select-grid">
+    <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+        <h2>Seleccionar sub-empresa</h2>
+        <form class="form">
+            <label for="sub-empresas">Sub-empresas</label>
+            <select name="empresa" id="sub-empresas">
+                <option value="Marketing">Marketing S.A.</option>
+                <option value="DesarrolloT">Desarrollo Tech</option>
+                <option value="RedesyC">Redes y Conectividad</option>
+            </select>
+        </form>
+    </div>
+    <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+        <h3>Selecciona periodo</h3>
+        <div class="value">$725,000</div>
+        <span style="color: var(--color-danger-red); font-weight: 600;">↓ 2.5%</span>
+    </div>
+</div>
+
+<div class="card" style="min-height: 350px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
+    <p style="color: var(--color-text-light);">
+        [Gráfico de Barras: Comparativo de Activos, Pasivos y Capital por Sub-Empresa]
+    </p>
+</div>
+
+<div class="card">
+    <h3>Balance General Detallado</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+            <tr>
+                <th>Sub-Empresa</th>
+                <th>Activos ($)</th>
+                <th>Pasivos ($)</th>
+                <th>Capital ($)</th>
+                <th>Ratio A/P</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td>Marketing Digital S.A.</td><td>450,000</td><td>180,000</td><td>270,000</td><td>2.50</td></tr>
+            <tr><td>Desarrollo Tech</td><td>680,000</td><td>280,000</td><td>400,000</td><td>2.43</td></tr>
+            <tr style="font-weight: 600; background-color: #F3F4F6;">
+                <td>Total Consolidado</td>
+                <td style="color: var(--color-accent-green);">1,810,000</td>
+                <td style="color: var(--color-danger-red);">725,000</td>
+                <td style="color: var(--color-primary-blue);">1,085,000</td>
+                <td>2.50</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

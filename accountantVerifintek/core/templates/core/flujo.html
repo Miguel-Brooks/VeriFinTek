@@ -1,0 +1,64 @@
+{% extends "core/base.html" %}
+
+{% block title %}SIGEC | Flujo de Aprobación{% endblock %}
+
+{% block header %}
+<h2>Flujo de Aprobación</h2>
+<p>Gestiona el proceso de revisión y aprobación de reportes financieros.</p>
+{% endblock %}
+
+{% block content %}
+<div class="metric-grid">
+    <div class="card" style="border-top: 4px solid var(--color-warning-yellow);">
+        <h3>Pendientes de Revisión</h3>
+        <div class="value" style="color: var(--color-warning-yellow);">8</div>
+    </div>
+    <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+        <h3>Aprobados este Mes</h3>
+        <div class="value" style="color: var(--color-accent-green);">45</div>
+    </div>
+    <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+        <h3>Rechazados (Total)</h3>
+        <div class="value" style="color: var(--color-danger-red);">3</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Listado de Reportes</h3>
+
+    <div class="flow-item" style="border-left-color: var(--color-warning-yellow);">
+        <div class="flow-details">
+            <h4>Marketing Digital S.A. - Balance General (Octubre 2025)</h4>
+            <p>Capturado por: Roberto Aburto (Rol Capturista)</p>
+            <p>Revisor Asignado: Mirna Sánchez (Rol Revisor)</p>
+        </div>
+        <div>
+            <span class="status-tag status-revision" style="margin-bottom: 5px;">En Revisión</span>
+            <a href="#" class="btn" style="background-color: var(--color-text-dark); color: var(--color-white); margin-top: 5px;">
+                Ver Detalles
+            </a>
+        </div>
+    </div>
+
+    <div class="flow-item" style="border-left-color: #FDE68A;">
+        <div class="flow-details">
+            <h4>Desarrollo Tech - Estado de Resultados (Octubre 2025)</h4>
+            <p>Capturado por: Ceci (Rol Capturista)</p>
+            <p style="color: var(--color-danger-red);">Pendiente de Asignación de Revisor</p>
+        </div>
+        <div>
+            <span class="status-tag status-revision" style="background-color: #FDE68A; margin-bottom: 5px;">Pendiente</span>
+            <a href="#" class="btn btn-primary" style="margin-top: 5px;">Asignar Revisor</a>
+        </div>
+    </div>
+
+    <div class="flow-item" style="border-left-color: var(--color-accent-green);">
+        <div class="flow-details">
+            <h4>Redes y Conectividad - Flujo de Efectivo (Septiembre 2025)</h4>
+            <p>Capturado por: Diego Muriel</p>
+            <p>Aprobado por: Mike (Rol Aprobador)</p>
+        </div>
+        <span class="status-tag status-approved">Aprobado</span>
+    </div>
+</div>
+{% endblock %}

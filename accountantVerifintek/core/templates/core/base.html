@@ -1,0 +1,77 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VeriFinTek | Panel{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'core/style.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+<div class="app-container">
+    {% block sidebar %}
+    <aside class="sidebar">
+        <div class="logo-section">SIGEC Verifintek</div>
+        <a href="{% url 'core:dashboard' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            <i class="fas fa-chart-line"></i> <span>Panel General</span>
+        </a>
+        <a href="{% url 'core:subempresas' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'subempresas' %}active{% endif %}">
+            <i class="fas fa-building"></i> <span>Sub-Empresas</span>
+        </a>
+        <a href="{% url 'core:captura' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'captura' %}active{% endif %}">
+            <i class="fas fa-file-invoice-dollar"></i> <span>Captura Financiera</span>
+        </a>
+        <a href="{% url 'core:flujo' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'flujo' %}active{% endif %}">
+            <i class="fas fa-sync-alt"></i> <span>Flujo de Aprobación</span>
+        </a>
+        <a href="{% url 'core:balance' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'balance' %}active{% endif %}">
+            <i class="fas fa-balance-scale"></i> <span>Balance Consolidado</span>
+        </a>
+        {# Placeholder para futura vista de administración avanzada #}
+        <a href="#" class="nav-link">
+            <i class="fas fa-user-shield"></i> <span>Administración</span>
+        </a>
+
+        <div class="user-profile">
+            {% if request.user.is_authenticated %}
+                <strong>{{ request.user.get_username }}</strong>
+                <small>Usuario autenticado</small>
+            {% else %}
+                <strong>Invitado</strong>
+                <small>No autenticado</small>
+            {% endif %}
+        </div>
+    </aside>
+    {% endblock %}
+
+    <main class="main-content">
+        <div class="header-content">
+            {% block header %}
+            <h2>Panel</h2>
+            <p>Resumen general.</p>
+            {% endblock %}
+        </div>
+
+        {% if messages %}
+            <ul>
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+</body>
+</html>
