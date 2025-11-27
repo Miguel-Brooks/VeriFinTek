@@ -26,6 +26,71 @@ class Empresa(models.Model):
         return self.nombre
 
 
+class Subempresa(models.Model):
+    """
+    Sub-empresa operativa que pertenece a una empresa 'madre'.
+    Los movimientos se registran a nivel de subempresa.
+    """
+
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name="subempresas",
+    )
+    nombre = models.CharField(max_length=255)
+    descripcion = models.TextField(blank=True)
+    esta_activa = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Sub-empresa"
+        verbose_name_plural = "Sub-empresas"
+        unique_together = ("empresa", "nombre")
+
+    def __str__(self) -> str:
+        return f"{self.nombre} ({self.empresa.nombre})"
+
+
+class EmpresaSubempresa(models.Model):
+    """
+    Tabla de transición explícita Empresa-Subempresa.
+    Útil si quieres metadata extra sobre la relación.
+    En este diseño, hace espejo de Subempresa. Puedes añadir campos
+    como 'porcentaje_participacion' si lo necesitas en el futuro.
+    """
+
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name="relaciones_subempresas",
+    )
+    subempresa = models.ForeignKey(
+        Subempresa,
+        on_delete=models.CASCADE,
+        related_name="relaciones_empresa",
+    )
+    porcentaje_participacion = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Participación de la empresa en la sub-empresa (opcional).",
+    )
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Relación empresa-subempresa"
+        verbose_name_plural = "Relaciones empresa-subempresa"
+        unique_together = ("empresa", "subempresa")
+
+    def __str__(self) -> str:
+        return f"{self.empresa} -> {self.subempresa}"
+
+
 class UsuarioEmpresa(models.Model):
     """
     Relación muchos-a-muchos entre Usuario y Empresa,
@@ -110,6 +175,15 @@ class Movimiento(models.Model):
         Empresa,
         on_delete=models.CASCADE,
         related_name="movimientos",
+        help_text="Empresa propietaria del grupo de sub-empresas.",
+    )
+    subempresa = models.ForeignKey(
+        Subempresa,
+        on_delete=models.CASCADE,
+        related_name="movimientos",
+        help_text="Sub-empresa sobre la que se registra el movimiento.",
+        null=True,
+        blank=True,
     )
     usuario_captura = models.ForeignKey(
         settings.AUTH_USER_MODEL,

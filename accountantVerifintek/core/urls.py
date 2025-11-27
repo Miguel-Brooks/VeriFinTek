@@ -8,11 +8,12 @@ urlpatterns = [
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
 
-    path("subempresas/", views.subempresas_view, name="subempresas"),
+    # path("subempresas/", views.subempresas_view, name="subempresas"),
     path("captura/", views.captura_view, name="captura"),
-    path("flujo/", views.flujo_view, name="flujo"),
+    # path("flujo/", views.flujo_view, name="flujo"),
     path("balance/", views.balance_view, name="balance"),
+    path("cambiar-contexto/", views.seleccionar_contexto_view, name="cambiar_contexto"),
 
     # Opcional: alias adicional si quieres una URL distinta para movimientos
-    path("movimientos/", views.movimientos_view, name="movimientos"),
+    # path("movimientos/", views.movimientos_view, name="movimientos"),
 ]
