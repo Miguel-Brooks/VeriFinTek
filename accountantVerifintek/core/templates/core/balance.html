@@ -6,7 +6,10 @@
 <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
         <h2>Balance Consolidado</h2>
-        <p>Visualiza el balance general consolidado de todas las sub-empresas (Octubre 2025).</p>
+        <p>
+            Visualiza el balance general consolidado de todas las sub-empresas
+            {% if empresa_actual %}de <strong>{{ empresa_actual.nombre }}</strong>{% endif %}.
+        </p>
     </div>
     <a href="#" class="btn" style="background-color: var(--color-text-dark); color: var(--color-white);">
         <i class="fas fa-file-pdf"></i> Exportar PDF
@@ -18,25 +21,28 @@
 <div class="metric-grid">
     <div class="card" style="border-top: 4px solid var(--color-accent-green);">
         <h3>Total Activos</h3>
-        <div class="value">$1,810,000</div>
-        <span style="color: var(--color-accent-green); font-weight: 600;">↑ 8.2%</span>
+        <div class="value">
+            ${{ total_activos|default:0 }}
+        </div>
     </div>
     <div class="card" style="border-top: 4px solid var(--color-danger-red);">
         <h3>Total Pasivos</h3>
-        <div class="value">$725,000</div>
-        <span style="color: var(--color-danger-red); font-weight: 600;">↓ 2.5%</span>
+        <div class="value">
+            ${{ total_pasivos|default:0 }}
+        </div>
     </div>
     <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
         <h3>Total Capital</h3>
-        <div class="value">$1,085,000</div>
-        <span style="color: var(--color-accent-green); font-weight: 600;">↑ 12.3%</span>
+        <div class="value">
+            ${{ total_capital|default:0 }}
+        </div>
     </div>
 </div>
 
 <div class="card"
      style="min-height: 350px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
     <p style="color: var(--color-text-light);">
-        [Gráfico de Barras: Comparativo de Activos, Pasivos y Capital por Sub-Empresa]
+        [Aquí más adelante irá el gráfico de barras de Activos, Pasivos y Capital por Sub-Empresa]
     </p>
 </div>
 
@@ -54,15 +60,49 @@
             </tr>
             </thead>
             <tbody>
-            <tr><td>Marketing Digital S.A.</td><td>450,000</td><td>180,000</td><td>270,000</td><td>2.50</td></tr>
-            <tr><td>Desarrollo Tech</td><td>680,000</td><td>280,000</td><td>400,000</td><td>2.43</td></tr>
-            <tr style="font-weight: 600; background-color: #F3F4F6;">
-                <td>Total Consolidado</td>
-                <td style="color: var(--color-accent-green);">1,810,000</td>
-                <td style="color: var(--color-danger-red);">725,000</td>
-                <td style="color: var(--color-primary-blue);">1,085,000</td>
-                <td>2.50</td>
-            </tr>
+            {% if balance_detallado %}
+                {% for fila in balance_detallado %}
+                    <tr>
+                        <td>{{ fila.subempresa.nombre }}</td>
+                        <td>{{ fila.activos }}</td>
+                        <td>{{ fila.pasivos }}</td>
+                        <td>{{ fila.capital }}</td>
+                        <td>{{ fila.ratio_ap|floatformat:2 }}</td>
+                    </tr>
+                {% endfor %}
+                <tr style="font-weight: 600; background-color: #F3F4F6;">
+                    <td>Total Consolidado</td>
+                    <td>
+                        {% if ratio_ap_total %}
+                            {{ ratio_ap_total|floatformat:2 }}
+                        {% else %}
+                            –
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--color-accent-green);">
+                        {{ total_activos }}
+                    </td>
+                    <td style="color: var(--color-danger-red);">
+                        {{ total_pasivos }}
+                    </td>
+                    <td style="color: var(--color-primary-blue);">
+                        {{ total_capital }}
+                    </td>
+                    <td>
+                        {% if total_pasivos %}
+                            {{ total_activos|divisibleby:total_pasivos }}
+                        {% else %}
+                            –
+                        {% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="5" style="text-align:center; color:var(--color-text-light);">
+                        No hay información de balance disponible para el contexto seleccionado.
+                    </td>
+                </tr>
+            {% endif %}
             </tbody>
         </table>
     </div>
