@@ -238,25 +238,34 @@ def balance_view(request):
 
     if empresa is None:
         ctx.update({
-            "total_activos": total_activos,
-            "total_pasivos": total_pasivos,
-            "total_capital": total_capital,
+            "total_activos": 0,
+            "total_pasivos": 0,
+            "total_capital": 0,
             "balance_detallado": [],
+            "ratio_ap_total": None,
         })
         return render(request, "core/balance.html", ctx)
-    
+
     qs_movs = Movimiento.objects.filter(empresa=empresa)
 
-    total_activos = qs_movs.filter(
-        tipo=Movimiento.TipoMovimiento.ACTIVO
-    ).aggregate(total=Sum('monto_total'))['total'] or 0
+    if subempresa:
+        qs_movs = qs_movs.filter(subempresa=subempresa)
+    
+    total_activos = (
+        qs_movs.filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or 0
+    )
 
-    total_pasivos = qs_movs.filter(
-        tipo=Movimiento.TipoMovimiento.PASIVO
-    ).aggregate(total=Sum('monto_total'))['total'] or 0
+    total_pasivos = (
+        qs_movs.filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or 0
+    )
 
-    capital_inicial = empresa.capital_inicial or 0
-    total_capital = capital_inicial + total_activos - total_pasivos
+    if subempresa:
+        total_capital = total_activos - total_pasivos
+    else:
+        capital_inicial = empresa.capital_inicial or 0
+        total_capital = capital_inicial + total_activos - total_pasivos
 
 
 
@@ -275,7 +284,7 @@ def balance_view(request):
             .aggregate(total=Sum("monto_total"))["total"] or 0
         )
 
-        cap_sub = act_sub - pas_sub  # aquí puedes sumar capital_inicial si quieres repartirlo
+        cap_sub = act_sub - pas_sub
         ratio_ap = (act_sub / pas_sub) if pas_sub else None
 
         balance_detallado.append({
@@ -295,10 +304,5 @@ def balance_view(request):
         "balance_detallado": balance_detallado,
         "ratio_ap_total": ratio_ap_total,
     })
-
-    
-
     # Después usarás ctx["empresa_actual"] / ctx["subempresa_actual"] para calcular el balance
     return render(request, "core/balance.html", ctx)
-
-

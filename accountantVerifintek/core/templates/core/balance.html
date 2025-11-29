@@ -9,6 +9,11 @@
         <p>
             Visualiza el balance general consolidado de todas las sub-empresas
             {% if empresa_actual %}de <strong>{{ empresa_actual.nombre }}</strong>{% endif %}.
+            {% if subempresa_actual %}
+                Visualiza el balance general de {{ empresa_actual.nombre }} ({{ subempresa_actual.nombre }}).
+            {% else %}
+                Visualiza el balance general consolidado de todas las sub-empresas de {{ empresa_actual.nombre }}.
+            {% endif %}
         </p>
     </div>
     <a href="#" class="btn" style="background-color: var(--color-text-dark); color: var(--color-white);">
@@ -41,9 +46,15 @@
 
 <div class="card"
      style="min-height: 350px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
-    <p style="color: var(--color-text-light);">
-        [Aquí más adelante irá el gráfico de barras de Activos, Pasivos y Capital por Sub-Empresa]
-    </p>
+    <h3>Distribución por Sub-empresa</h3>
+
+    {% if balance_detallado %}
+        <canvas id="balanceChart" style="max-height: 380px;"></canvas>
+    {% else %}
+        <p style="text-align:center; color: var(--color-text-light); margin-top: 20px;">
+            No hay datos suficientes para generar la gráfica.
+        </p>
+    {% endif %}
 </div>
 
 <div class="card">
@@ -61,6 +72,73 @@
             </thead>
             <tbody>
             {% if balance_detallado %}
+
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+                <script>
+                    (function () {
+                        const ctx = document.getElementById('balanceChart');
+                        if (!ctx) return;
+
+                        const labels = [
+                            {% for row in balance_detallado %}
+                                '{{ row.subempresa.nombre|escapejs }}'{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        ];
+
+                        const dataActivos = [
+                            {% for row in balance_detallado %}
+                                {{ row.activos|default:0 }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        ];
+
+                        const dataPasivos = [
+                            {% for row in balance_detallado %}
+                                {{ row.pasivos|default:0 }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        ];
+
+                        const dataCapital = [
+                            {% for row in balance_detallado %}
+                                {{ row.capital|default:0 }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        ];
+
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [
+                                    {
+                                        label: 'Activos',
+                                        data: dataActivos,
+                                    },
+                                    {
+                                        label: 'Pasivos',
+                                        data: dataPasivos,
+                                    },
+                                    {
+                                        label: 'Capital',
+                                        data: dataCapital,
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    x: { stacked: false },
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            // puedes ajustar si quieres formatear como $
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    })();
+                </script>
+                
                 {% for fila in balance_detallado %}
                     <tr>
                         <td>{{ fila.subempresa.nombre }}</td>

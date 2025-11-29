@@ -53,11 +53,11 @@
             <h3>Resumen rápido</h3>
             <p style="margin-bottom: 4px;">Activos capturados:</p>
             <div class="value">
-                ${{ resumen_captura.activos|default:0 }}
+                ${{ total_activos|default:0|floatformat:0 }}
             </div>
             <p style="margin-top: 10px; margin-bottom: 4px;">Pasivos capturados:</p>
             <div class="value" style="color: var(--color-danger-red);">
-                ${{ resumen_captura.pasivos|default:0 }}
+                ${{ total_pasivos|default:0|floatformat:0 }}
             </div>
         </div>
     </div>
