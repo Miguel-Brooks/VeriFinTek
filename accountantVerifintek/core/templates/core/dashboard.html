@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+
+{% block title %}SIGEC | Panel General{% endblock %}
+
+{% block header %}
+<h2>Panel General</h2>
+<p>
+    Resumen del sistema de gestión empresarial en tiempo real
+    {% if empresa_actual %}
+        para <strong>{{ empresa_actual.nombre }}</strong>
+        {% if subempresa_actual %}( {{ subempresa_actual.nombre }} ){% endif %}
+    {% endif %}.
+</p>
+{% endblock %}
+
+{% block content %}
+<div class="metric-grid">
+    <div class="card">
+        <h3>Sub-Empresas Activas</h3>
+        <div class="value">
+            {{ total_subempresas_activas|default:0 }}
+        </div>
+    </div>
+    <div class="card">
+        <h3>Reportes Aprobados (Mes)</h3>
+        <div class="value" style="color: var(--color-accent-green);">
+            {{ total_reportes_aprobados|default:0 }}
+        </div>
+    </div>
+    <div class="card">
+        <h3>Pendientes de Revisión</h3>
+        <div class="value" style="color: var(--color-warning-yellow);">
+            {{ total_pendientes_revision|default:0 }}
+        </div>
+    </div>
+    <div class="card">
+        <h3>Balance Total</h3>
+        <div class="value" style="color: var(--color-primary-blue);">
+            ${{ balance_total|default:0|floatformat:2 }}
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 40px;">
+    <h3>Acciones Rápidas</h3>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{% url 'core:captura' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Nueva Captura Financiera
+        </a>
+        <a href="{% url 'core:balance' %}" class="btn"
+           style="background-color: #F3F4F6; color: var(--color-text-dark);">
+            <i class="fas fa-chart-area"></i> Generar Balance Consolidado
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Aprobaciones Pendientes</h3>
+
+    {% if aprobaciones_pendientes %}
+        {% for rep in aprobaciones_pendientes %}
+            <div class="flow-item" style="border-left-color: var(--color-accent-blue);">
+                <div class="flow-details">
+                    <h4>{{ rep.titulo }}</h4>
+                    <p>Capturado por: {{ rep.capturado_por }}</p>
+                </div>
+                <span class="status-tag status-revision">
+                    {{ rep.estado_legible }}
+                </span>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p style="color: var(--color-text-light);">
+            No hay aprobaciones pendientes por el momento.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
+
