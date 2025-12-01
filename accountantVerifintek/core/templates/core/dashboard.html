@@ -1,5 +1,7 @@
 {% extends "core/base.html" %}
 
+{% load humanize %}
+
 {% block title %}SIGEC | Panel General{% endblock %}
 
 {% block header %}
@@ -36,7 +38,7 @@
     <div class="card">
         <h3>Balance Total</h3>
         <div class="value" style="color: var(--color-primary-blue);">
-            ${{ balance_total|default:0|floatformat:2 }}
+            ${{ balance_total|floatformat:2|intcomma }}
         </div>
     </div>
 </div>

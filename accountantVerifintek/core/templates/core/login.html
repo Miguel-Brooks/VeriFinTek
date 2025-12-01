@@ -1,27 +1,110 @@
 {% extends "core/base.html" %}
 
-{% block title %}Iniciar sesión{% endblock %}
+{% block title %}Iniciar sesión | SIGEC VeriFinTek{% endblock %}
 
+{# Ocultamos el sidebar en la pantalla de login #}
 {% block sidebar %}{% endblock %}
 
-{% block header %}
-<h2>Iniciar sesión</h2>
-<p>Accede a tu panel para administrar movimientos.</p>
-{% endblock %}
+{# No usamos el header normal del layout #}
+{% block header %}{% endblock %}
 
 {% block content %}
-<form method="post" action="">
-    {% csrf_token %}
-    <label for="id_username">Usuario:</label>
-    <input type="text" name="username" id="id_username" required>
+<div style="
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+">
+    <div class="card" style="
+        max-width: 420px;
+        width: 100%;
+        padding: 32px 28px;
+        box-shadow: 0 15px 40px rgba(15, 23, 42, 0.18);
+    ">
+        <div style="text-align:center; margin-bottom: 20px;">
+            <div style="font-weight: 800; font-size: 1.6rem; margin-bottom: 4px;">
+                SIGEC Verifintek
+            </div>
+            <p style="margin: 0; font-size: 0.9rem; color: var(--color-text-light);">
+                Inicia sesión para administrar la información financiera.
+            </p>
+        </div>
+        
+        {% if messages %}
+            <div style="margin-bottom: 16px;">
+                {% for message in messages %}
+                    <div style="
+                        font-size: 0.85rem;
+                        padding: 8px 10px;
+                        border-radius: 6px;
+                        margin-bottom: 6px;
+                        {% if message.tags == 'error' %}
+                            background-color: #FEE2E2;
+                            color: #B91C1C;
+                        {% else %}
+                            background-color: #DBEAFE;
+                            color: #1D4ED8;
+                        {% endif %}
+                    ">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
 
-    <label for="id_password">Contraseña:</label>
-    <input type="password" name="password" id="id_password" required>
+        <form method="post" action="" style="display:flex; flex-direction:column; gap:12px;">
+            {% csrf_token %}
 
-    <button type="submit" class="btn btn-primary">Entrar</button>
-</form>
+            <div>
+                <label for="id_username" style="display:block; font-size:0.9rem; margin-bottom:4px;">
+                    Usuario
+                </label>
+                <input type="text"
+                       name="username"
+                       id="id_username"
+                       required
+                       style="
+                           width: 100%;
+                           padding: 10px 12px;
+                           border-radius: 8px;
+                           border: 1px solid #E5E7EB;
+                           font-size: 0.95rem;
+                       "
+                       placeholder="Escribe tu usuario">
+            </div>
 
-<p>
-    ¿Eres admin? <a href="/admin/login/">Ir al login de administrador</a>
-</p>
+            <div>
+                <label for="id_password" style="display:block; font-size:0.9rem; margin-bottom:4px;">
+                    Contraseña
+                </label>
+                <input type="password"
+                       name="password"
+                       id="id_password"
+                       required
+                       style="
+                           width: 100%;
+                           padding: 10px 12px;
+                           border-radius: 8px;
+                           border: 1px solid #E5E7EB;
+                           font-size: 0.95rem;
+                       "
+                       placeholder="••••••••">
+            </div>
+
+            <button type="submit"
+                    class="btn btn-primary"
+                    style="margin-top:10px; width:100%; justify-content:center;">
+                Entrar al panel
+            </button>
+        </form>
+
+        <div style="margin-top: 18px; text-align:center; font-size:0.85rem; color:var(--color-text-light);">
+            ¿Eres administrador del sistema?
+            <a href="/admin/login/" style="color: var(--color-primary-blue); text-decoration:none;">
+                Ir al panel de administración
+            </a>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -27,15 +27,28 @@
             </label>
 
             <select name="contexto" id="contexto_select" style="width:100%; margin-bottom:8px;">
+                {% if not empresa_actual %}
+                    <option value="">-- Selecciona empresa / sub-empresa --</option>
+                {% endif %}
+
                 {% for emp in empresas_disponibles %}
-                    <option value="empresa:{{ emp.id }}"
-                        {% if empresa_actual and not subempresa_actual and emp.id == empresa_actual.id %}selected{% endif %}>
-                        {{ emp.nombre }} (todas)
-                    </option>
-                    {% for sub in emp.subempresas.all %}
+                    {# Opción "Empresa X (todas)" solo si emp.mostrar_todas es True #}
+                    {% if emp.mostrar_todas %}
+                        <option value="empresa:{{ emp.id }}"
+                            {% if empresa_actual and empresa_actual.id == emp.id and not subempresa_actual %}
+                                selected
+                            {% endif %}>
+                            {{ emp.nombre }} (todas)
+                        </option>
+                    {% endif %}
+
+                    {# Sub-empresas permitidas para este usuario #}
+                    {% for sub in emp.subs_permitidas %}
                         <option value="subempresa:{{ sub.id }}"
-                            {% if subempresa_actual and sub.id == subempresa_actual.id %}selected{% endif %}>
-                            └ {{ sub.nombre }}
+                            {% if subempresa_actual and subempresa_actual.id == sub.id %}
+                                selected
+                            {% endif %}>
+                            {{ emp.nombre }} / {{ sub.nombre }}
                         </option>
                     {% endfor %}
                 {% endfor %}
@@ -58,6 +71,8 @@
         class="nav-link {% if request.resolver_match.url_name == 'balance' %}active{% endif %}">
             <i class="fas fa-balance-scale"></i> <span>Consulta de reporte</span>
         </a>
+
+
 
         {# Contenedor inferior: usuario + logout #}
         <div class="user-profile">

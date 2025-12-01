@@ -118,6 +118,14 @@ class UsuarioEmpresa(models.Model):
         default=Rol.FINANCIERO,
     )
 
+    subempresa = models.ForeignKey(
+        Subempresa,
+        on_delete=models.SET_NULL, 
+        null=True,
+        blank=True,
+        related_name="usuarios_asignados",
+    )
+
     # Permisos básicos por empresa (R, W, L)
     puede_leer = models.BooleanField(default=True)
     puede_escribir = models.BooleanField(default=False)
@@ -132,6 +140,8 @@ class UsuarioEmpresa(models.Model):
         unique_together = ("usuario", "empresa")
 
     def __str__(self) -> str:
+        if self.subempresa:
+            return f"{self.usuario} @ {self.empresa} / {self.subempresa}"
         return f"{self.usuario} @ {self.empresa} ({self.rol})"
 
 

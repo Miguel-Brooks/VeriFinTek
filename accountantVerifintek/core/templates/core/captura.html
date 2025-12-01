@@ -1,5 +1,7 @@
 {% extends "core/base.html" %}
 
+{% load humanize %}
+
 {% block title %}SIGEC | Captura Financiera{% endblock %}
 
 {% block header %}
@@ -43,24 +45,42 @@
                     <span style="color: var(--color-text-light);">todas las sub-empresas</span>
                 {% endif %}
             </p>
-            <p style="font-size: 0.85rem; color: var(--color-text-light);">
-                Para cambiar el contexto usa el selector “Empresa / Sub-empresa”
-                del panel izquierdo.
-            </p>
+
         </div>
 
         <div class="card" style="border-top: 4px solid var(--color-danger-red);">
             <h3>Resumen rápido</h3>
             <p style="margin-bottom: 4px;">Activos capturados:</p>
             <div class="value">
-                ${{ total_activos|default:0|floatformat:0 }}
+                ${{ total_activos|floatformat:2|intcomma }}
             </div>
             <p style="margin-top: 10px; margin-bottom: 4px;">Pasivos capturados:</p>
             <div class="value" style="color: var(--color-danger-red);">
-                ${{ total_pasivos|default:0|floatformat:0 }}
+                ${{ total_pasivos|floatformat:2|intcomma }}
             </div>
         </div>
     </div>
+
+    {% if movimientos %}
+    <div class="card" style="margin-top: 20px;">
+        <h3>Movimientos que se deberan pagar a futuro</h3>
+        <ul>
+        {% for mov in movimientos %}
+            {% if mov.tipo == mov.TipoMovimiento.PASIVO %}
+            <li>
+                {{ mov.fecha_registro }} – {{ mov.concepto.nombre }}:
+                pasivo por ${{ mov.monto_total|floatformat:2|intcomma }} que la empresa debe pagar.
+            </li>
+            {% endif %}
+        {% endfor %}
+        {% if not movimientos|dictsort:"tipo" %}
+            <li>No hay pasivos registrados aún.</li>
+        {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+
 
     <div class="card" style="margin-top: 30px;">
         <h3>Movimientos recientes</h3>
@@ -82,7 +102,7 @@
                             <td>{{ mov.fecha_registro }}</td>
                             <td>{{ mov.get_tipo_display }}</td>
                             <td>{{ mov.concepto.nombre }}</td>
-                            <td>${{ mov.monto_total }}</td>
+                            <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
                             <td>
                                 {% if mov.subempresa %}
                                     {{ mov.subempresa.nombre }}
