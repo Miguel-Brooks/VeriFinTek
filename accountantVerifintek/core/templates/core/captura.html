@@ -16,11 +16,12 @@
             {% endif %}
         </p>
     </div>
-    <a href="#" class="btn" style="background-color: var(--color-text-dark); color: white;">
-        <i class="fas fa-file-pdf"></i> Exportar PDF
+    <a href="#registro-movimiento" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Registrar movimiento
     </a>
 </div>
 {% endblock %}
+
 
 {% block content %}
 
@@ -61,6 +62,75 @@
         </div>
     </div>
 
+    {# Formulario de registro de movimiento #}
+    {% if puede_capturar %}
+    <div class="card" id="registro-movimiento" style="margin-top: 30px;">
+        <h3>Registrar nuevo movimiento</h3>
+        <p style="color: var(--color-text-light); margin-bottom: 10px;">
+            Los montos y fechas se guardarán para la sub-empresa seleccionada en el menú lateral.
+        </p>
+
+        <form method="post" class="form" id="form-movimiento">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+
+            <div class="form-grid">
+                <div class="form-group">
+                    {{ form.tipo.label_tag }}
+                    {{ form.tipo }}
+                    {{ form.tipo.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.concepto_nombre.label_tag }}
+                    {{ form.concepto_nombre }}
+                    {{ form.concepto_nombre.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.monto_total.label_tag }}
+                    {{ form.monto_total }}
+                    {{ form.monto_total.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.fecha_registro.label_tag }}
+                    {{ form.fecha_registro }}
+                    {{ form.fecha_registro.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.fecha_inicio.label_tag }}
+                    {{ form.fecha_inicio }}
+                    {{ form.fecha_inicio.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.numero_pagos.label_tag }}
+                    {{ form.numero_pagos }}
+                    {{ form.numero_pagos.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.frecuencia_pago.label_tag }}
+                    {{ form.frecuencia_pago }}
+                    {{ form.frecuencia_pago.errors }}
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+                {{ form.descripcion.label_tag }}
+                {{ form.descripcion }}
+                {{ form.descripcion.errors }}
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+                {{ form.observaciones.label_tag }}
+                {{ form.observaciones }}
+                {{ form.observaciones.errors }}
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 15px;">
+                Guardar movimiento
+            </button>
+        </form>
+
+    </div>
+    {% endif %}
+
     {% if movimientos %}
     <div class="card" style="margin-top: 20px;">
         <h3>Movimientos que se deberan pagar a futuro</h3>
@@ -80,8 +150,6 @@
     </div>
     {% endif %}
 
-
-
     <div class="card" style="margin-top: 30px;">
         <h3>Movimientos recientes</h3>
         <div class="table-container">
@@ -93,6 +161,7 @@
                     <th>Concepto</th>
                     <th>Monto</th>
                     <th>Sub-empresa</th>
+                    <th>Acciones</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -110,7 +179,20 @@
                                     –
                                 {% endif %}
                             </td>
+                            <td>
+                                <a href="{% url 'core:movimiento_detalle' mov.id %}"
+                                class="btn btn-secondary btn-sm">
+                                    Detalle
+                                </a>
+                                <button type="button"
+                                        class="btn btn-danger btn-sm btn-eliminar-mov"
+                                        data-url="{% url 'core:movimiento_eliminar' mov.id %}"
+                                        data-descripcion="{{ mov.concepto.nombre }} - {{ mov.monto_total|floatformat:2 }}">
+                                    Borrar
+                                </button>
+                            </td>
                         </tr>
+
                     {% endfor %}
                 {% else %}
                     <tr>
@@ -124,7 +206,162 @@
         </div>
     </div>
 
-    {# Aquí más adelante puedes meter un <form> para crear movimientos #}
-
 {% endif %}
+
+<div id="modal-eliminar-mov" class="modal-overlay">
+    <div class="modal-dialog">
+        <h3>Eliminar movimiento</h3>
+        <p id="modal-eliminar-texto" style="margin-top: 10px;">
+            ¿Seguro que deseas eliminar este movimiento?
+        </p>
+        <form method="post" id="form-eliminar-mov">
+            {% csrf_token %}
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="modal-eliminar-cancelar">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn btn-danger">
+                    Sí, borrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- JS para el modal -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const overlay = document.getElementById("modal-eliminar-mov");
+    const texto = document.getElementById("modal-eliminar-texto");
+    const form = document.getElementById("form-eliminar-mov");
+    const btnCancelar = document.getElementById("modal-eliminar-cancelar");
+
+    function abrirModal(url, descripcion) {
+        texto.textContent = `¿Seguro que deseas eliminar el movimiento "${descripcion}"?`;
+        form.action = url;
+        overlay.classList.add("is-open");
+    }
+
+    function cerrarModal() {
+        overlay.classList.remove("is-open");
+    }
+
+    document.querySelectorAll(".btn-eliminar-mov").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            const url = this.dataset.url;
+            const desc = this.dataset.descripcion || "";
+            abrirModal(url, desc);
+        });
+    });
+
+    btnCancelar.addEventListener("click", function () {
+        cerrarModal();
+    });
+
+    overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) {
+            cerrarModal();
+        }
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+            cerrarModal();
+        }
+    });
+});
+</script>
+
+<!-- JS para el llenado tipo calculadora y auto formateado -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("form-movimiento");
+    const montoInput = document.getElementById("id_monto_total");
+    const numPagosInput = document.getElementById("id_numero_pagos");
+    const frecuenciaSelect = document.getElementById("id_frecuencia_pago");
+
+    // --- Formato de monto: flujo tipo calculadora (centavos) ---
+    if (montoInput) {
+        montoInput.addEventListener("input", function (e) {
+            const input = e.target;
+
+            // Solo dígitos (ignoramos puntos, comas, etc.)
+            let digits = input.value.replace(/\D/g, "");
+
+            if (!digits) {
+                input.value = "00.00";
+                return;
+            }
+
+            // Interpretar como centavos
+            let cents = parseInt(digits, 10);
+
+            let intPart = Math.floor(cents / 100);
+            let decPart = cents % 100;
+
+            let decStr = decPart.toString().padStart(2, "0");
+
+            let intStr;
+            if (intPart < 100) {
+                intStr = intPart.toString().padStart(2, "0");
+            } else {
+                intStr = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+
+            input.value = intStr + "." + decStr;
+        });
+
+        // Antes de enviar, quitar comas para que el backend reciba un número limpio
+        if (form) {
+            form.addEventListener("submit", function () {
+                montoInput.value = montoInput.value.replace(/,/g, "");
+            });
+        }
+    }
+
+    // --- Habilitar/deshabilitar "Único" según número de pagos ---
+    if (numPagosInput && frecuenciaSelect) {
+        const unicoOption = frecuenciaSelect.querySelector("option[value='UNICO']");
+
+        function toggleUnico() {
+            const value = parseInt(numPagosInput.value, 10);
+            if (!unicoOption) return;
+
+            if (!isNaN(value) && value > 1) {
+                // Más de 1 pago: desactivar "Único"
+                unicoOption.disabled = true;
+                if (frecuenciaSelect.value === "UNICO") {
+                    const alternativa = Array.from(frecuenciaSelect.options).find(
+                        opt => opt.value && opt.value !== "UNICO" && !opt.disabled
+                    );
+                    if (alternativa) {
+                        frecuenciaSelect.value = alternativa.value;
+                    }
+                }
+            } else {
+                // 1 pago o vacío: permitir "Único"
+                unicoOption.disabled = false;
+            }
+        }
+
+        numPagosInput.addEventListener("input", toggleUnico);
+        numPagosInput.addEventListener("change", toggleUnico);
+        // Estado inicial al cargar la página
+        toggleUnico();
+    }
+
+    // --- Marcar campos con error y animarlos ---
+    document.querySelectorAll(".form-group").forEach(function (group) {
+        const hasError = group.querySelector(".errorlist");
+        if (hasError) {
+            group.classList.add("has-error");
+        }
+    });
+});
+</script>
+
+
+
+
+
 {% endblock %}

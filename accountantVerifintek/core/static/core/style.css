@@ -243,6 +243,22 @@ th {
     text-transform: uppercase;
 }
 
+.tabla-pago-edit {
+    margin-left: 6px;
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.tabla-pago-edit:hover {
+    color: var(--color-primary-dark);
+}
+
+.orden-icon {
+    font-size: 0.75rem;
+    margin-left: 4px;
+}
+
 /* --- Layout del Flujo de Aprobación --- */
 .flow-item {
     background-color: var(--color-surface);
@@ -273,6 +289,400 @@ th {
     gap: 10px;
     color: var(--color-text-dark);
 }
+
+/* Inputs base del formulario de registro de movimientos */
+.form input,
+.form select,
+.form textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    font-size: 0.9rem;
+    font-family: var(--font-stack);
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.3);
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+    color: var(--color-text-light);
+}
+
+/* Estilos de errores */
+.form-group .errorlist {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    color: var(--color-danger-red);
+    font-size: 0.8rem;
+}
+
+.form-group.has-error input,
+.form-group.has-error select,
+.form-group.has-error textarea {
+    border-color: var(--color-danger-red);
+    animation: shake 0.2s linear 2;
+}
+
+/* Modal de borrar movimiento */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-overlay.is-open {
+    display: flex;
+}
+
+.modal-dialog {
+    background: var(--color-bg-card);
+    color: var(--color-text-main);
+    border-radius: 8px;
+    padding: 20px 22px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+/* Si todavía no tienes .btn-danger y .btn-secondary, puedes definirlas así: */
+.btn-danger {
+    background-color: var(--color-danger-red);
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.btn-secondary {
+    background-color: #4b5563;
+    color: #e5e7eb;
+}
+
+.btn-secondary:hover {
+    background-color: #374151;
+}
+
+/* Estilos del formulario de registros de pago */
+.pago-form {
+    margin-top: 8px;
+}
+
+.pago-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px 16px;
+    align-items: flex-end;
+}
+
+.form-global-error {
+    background: rgba(254, 242, 242, 0.95);
+    border: 1px solid rgba(248, 113, 113, 0.8);
+    color: var(--color-danger-red);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin: 8px 0 10px;
+}
+
+
+/* Prefijo de "$" en los inputs de montos */
+.input-with-prefix {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.input-prefix {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-light);
+}
+
+/* Información general del detalle de un movimiento */
+.mov-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 20px;
+    margin-top: 10px;
+}
+
+.mov-info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(229, 231, 235, 0.8);
+    background: rgba(249, 250, 251, 0.8);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease,
+                transform 0.15s ease, border-color 0.15s ease;
+}
+
+.mov-info-item:hover {
+    background: #ffffff;
+    border-color: rgba(191, 219, 254, 0.9);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+.mov-info-highlight {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(16, 185, 129, 0.04));
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
+.mov-info-main {
+    grid-column: span 2;
+}
+
+.mov-info-full {
+    grid-column: 1 / -1;
+}
+
+.mov-info-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-light);
+    margin-bottom: 2px;
+}
+
+.mov-info-value {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-dark);
+    word-break: break-word;
+}
+
+@media (max-width: 700px) {
+    .mov-info-main {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Estilo del contenedor del monto ingresado y restante */
+.pago-monto-wrapper {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.pago-monto-col {
+    flex: 1 1 220px;
+}
+
+.restante-box {
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #92400E;
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+}
+
+@media (max-width: 600px) {
+    .pago-monto-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* Pagos realizados dentro de un movimiento */
+.pagos-realizados-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-light);
+    margin-bottom: 6px;
+}
+
+.pagos-realizados-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.pago-chip {
+    background-color: #F9FAFB;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 150px;
+    max-width: 220px;
+    font-size: 0.8rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.pago-chip:hover {
+    background-color: #ffffff;
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+
+.pago-chip-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pago-chip-num {
+    font-weight: 600;
+    color: var(--color-text-dark);
+}
+
+.pago-chip-fecha {
+    color: var(--color-text-light);
+}
+
+.pago-chip-monto {
+    font-weight: 600;
+    color: var(--color-text-dark);
+}
+
+.pago-chip-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.pago-chip-edit {
+    font-size: 0.75rem;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.pago-chip-edit:hover {
+    color: var(--color-primary-dark);
+}
+
+/* Iconos de edición (chips y tabla) como botoncitos redondos */
+.pago-chip-edit,
+.tabla-pago-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.8rem;
+    color: var(--color-primary-blue);
+    text-decoration: none;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        transform 0.1s ease,
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.pago-chip-edit:hover,
+.tabla-pago-edit:hover {
+    background-color: #EFF6FF;
+    border-color: var(--color-primary-blue);
+    color: var(--color-primary-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
+}
+
+/* Encabezados de la tabla de pagos */
+th .tabla-sort {
+    text-decoration: none;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+th .tabla-sort:hover {
+    color: var(--color-primary-blue);
+}
+
+.orden-icon {
+    font-size: 0.75rem;
+    margin-left: 2px;
+}
+
+/* Flecha para regresar */
+.header-with-back {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-light);
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.back-link:hover {
+    background-color: #EFF6FF;
+    border-color: var(--color-primary-blue);
+    color: var(--color-primary-blue);
+}
+
+.back-arrow {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+
+@media (max-width: 700px) {
+    .mov-info-main {
+        grid-column: 1 / -1;
+    }
+}
+
+
+/* Animación de "shake" */
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+    75% { transform: translateX(-3px); }
+    100% { transform: translateX(0); }
+}
+
 
 /* --- Media Queries (Adaptabilidad) --- */
 @media (max-width: 900px) {

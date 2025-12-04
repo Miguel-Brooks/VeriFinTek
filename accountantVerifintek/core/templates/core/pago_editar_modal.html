@@ -1,0 +1,133 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+
+{% block title %}Editar pago {{ pago.numero_pago }}{% endblock %}
+
+{% block header %}
+<div class="header-with-back">
+    <a href="{% url 'core:movimiento_detalle' movimiento.id %}" class="back-link">
+        <span class="back-arrow">&larr;</span>
+    </a>
+    <div>
+        <h2>Editar pago {{ pago.numero_pago }}</h2>
+        <p>
+            Movimiento: <strong>#{{ movimiento.id }}</strong> ·
+            Monto total movimiento:
+            <strong>${{ movimiento.monto_total|floatformat:2|intcomma }}</strong>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+<div class="card" style="max-width: 480px; margin: 0 auto;">
+    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3>Editar pago {{ pago.numero_pago }}</h3>
+        <a href="{% url 'core:movimiento_detalle' movimiento.id %}"
+           class="back-link"
+           title="Cerrar">
+            <span class="back-arrow">&times;</span>
+        </a>
+    </div>
+
+    <form method="post" class="form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="form-group">
+            {{ form.monto.label_tag }}
+            <div class="input-with-prefix">
+                <span class="input-prefix">$</span>
+                {{ form.monto }}
+            </div>
+            {{ form.monto.errors }}
+        </div>
+
+        <div class="form-group">
+            {{ form.fecha_pago.label_tag }}
+            {{ form.fecha_pago }}
+            {{ form.fecha_pago.errors }}
+        </div>
+
+        <div class="form-group">
+            {{ form.fecha_vencimiento.label_tag }}
+            {{ form.fecha_vencimiento }}
+            {{ form.fecha_vencimiento.errors }}
+        </div>
+
+        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:15px;">
+            <a href="{% url 'core:movimiento_detalle' movimiento.id %}" class="btn btn-secondary">
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                Guardar
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- JS para ingresar como calculadora -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form");
+    const montoInput = document.getElementById("id_monto");
+
+    if (!montoInput) return;
+
+    function formatAsCalculator(value) {
+        let digits = value.replace(/\D/g, "");
+
+        if (!digits) {
+            return "00.00";
+        }
+
+        let cents = parseInt(digits, 10);
+        let intPart = Math.floor(cents / 100);
+        let decPart = cents % 100;
+
+        let decStr = decPart.toString().padStart(2, "0");
+        let intStr;
+
+        if (intPart < 100) {
+            intStr = intPart.toString().padStart(2, "0");
+        } else {
+            intStr = intPart
+                .toString()
+                .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        return intStr + "." + decStr;
+    }
+
+    // Formatear valor inicial (si viene de la BD) o poner 00.00
+    if (montoInput.value) {
+        const raw = montoInput.value.replace(/,/g, "");
+        const num = parseFloat(raw);
+        if (!isNaN(num)) {
+            const cents = Math.round(num * 100);
+            montoInput.value = formatAsCalculator(String(cents));
+        } else {
+            montoInput.value = "00.00";
+        }
+    } else {
+        montoInput.value = "00.00";
+    }
+
+    // Comportamiento tipo calculadora en cada input
+    montoInput.addEventListener("input", function (e) {
+        e.target.value = formatAsCalculator(e.target.value);
+    });
+
+    // Limpiar comas antes de enviar el formulario
+    if (form) {
+        form.addEventListener("submit", function () {
+            if (montoInput.value) {
+                montoInput.value = montoInput.value.replace(/,/g, "");
+            }
+        });
+    }
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,517 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+
+{% block title %}Movimiento #{{ movimiento.id }}{% endblock %}
+
+{% block header %}
+<div class="header-with-back">
+    <a href="{% url 'core:captura' %}" class="back-link">
+        <span class="back-arrow">&larr;</span>
+    </a>
+    <div>
+        <h2>Detalle de movimiento</h2>
+        <p>
+            Empresa: <strong>{{ movimiento.empresa.nombre }}</strong>
+            {% if movimiento.subempresa %}
+                / Sub-empresa: <strong>{{ movimiento.subempresa.nombre }}</strong>
+            {% endif %}
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+<div class="card">
+    <h3>Información general</h3>
+    <div class="mov-info-grid">
+        <div class="mov-info-item mov-info-main">
+            <span class="mov-info-label">Folio</span>
+            <span class="mov-info-value">{{ movimiento.folio|default:"—" }}</span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Tipo</span>
+            <span class="mov-info-value">{{ movimiento.get_tipo_display }}</span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Estado</span>
+            <span class="mov-info-value">{{ movimiento.get_estado_display }}</span>
+        </div>
+
+        <div class="mov-info-item mov-info-highlight">
+            <span class="mov-info-label">Monto total</span>
+            <span class="mov-info-value">
+                ${{ movimiento.monto_total|floatformat:2|intcomma }}
+            </span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">{{ label_pagado }}</span>
+            <span class="mov-info-value">
+                ${{ total_pagado|floatformat:2|intcomma }}
+            </span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">{{ label_pendiente }}</span>
+            <span class="mov-info-value">
+                ${{ total_pendiente|floatformat:2|intcomma }}
+            </span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Fecha de registro</span>
+            <span class="mov-info-value">{{ movimiento.fecha_registro }}</span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Fecha de inicio</span>
+            <span class="mov-info-value">{{ movimiento.fecha_inicio }}</span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Núm. de pagos</span>
+            <span class="mov-info-value">{{ movimiento.numero_pagos }}</span>
+        </div>
+
+        <div class="mov-info-item">
+            <span class="mov-info-label">Frecuencia</span>
+            <span class="mov-info-value">{{ movimiento.get_frecuencia_pago_display }}</span>
+        </div>
+
+        <div class="mov-info-item mov-info-full">
+            <span class="mov-info-label">Capturado por</span>
+            <span class="mov-info-value">
+                {% if movimiento.usuario_captura %}
+                    {{ movimiento.usuario_captura.get_username }}
+                {% else %}
+                    —
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="mov-info-item mov-info-full">
+            <span class="mov-info-label">Observaciones</span>
+            <span class="mov-info-value">
+                {% if movimiento.observaciones %}
+                    {{ movimiento.observaciones|linebreaksbr }}
+                {% else %}
+                    <span style="color: var(--color-text-light);">Sin observaciones.</span>
+                {% endif %}
+            </span>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="card" style="margin-top: 20px;">
+    <h3>Pagos asociados</h3>
+
+    {% if puede_editar %}
+    <div style="margin-bottom: 20px;">
+
+        {# Pagos realizados en formato compacto #}
+        {% if pagos_realizados %}
+            <div class="pagos-realizados-header">
+                <span>Pagos realizados</span>
+            </div>
+            <div class="pagos-realizados-list">
+                {% for p in pagos_realizados %}
+                    <div class="pago-chip">
+                        <div class="pago-chip-row">
+                            <span class="pago-chip-num">#{{ p.numero_pago }}</span>
+                            <span class="pago-chip-fecha">
+                                {{ p.fecha_pago|default:p.fecha_vencimiento }}
+                            </span>
+                        </div>
+
+                        <div class="pago-chip-row pago-chip-row-bottom">
+                            <span class="pago-chip-monto">
+                                ${{ p.monto|floatformat:2|intcomma }}
+                            </span>
+
+                            {% if puede_editar %}
+                            <a href="{% url 'core:pago_editar' movimiento.id p.id %}"
+                            class="pago-chip-edit"
+                            title="Editar pago {{ p.numero_pago }}">
+                                &#9998;
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+        {% else %}
+            <p style="margin-bottom: 10px; color: var(--color-text-light);">
+                Aún no se ha registrado ningún pago relacionado con este movimiento.
+            </p>
+        {% endif %}
+
+        <!-- {# Formulario para registrar nuevo pago #}
+        <div style="margin-bottom: 20px;">
+            <h4>Registrar nuevo pago</h4>
+
+            {% if form_error_global %}
+                <div class="form-global-error">
+                    {{ form_error_global }}
+                </div>
+            {% endif %}
+
+            <form method="post" class="form pago-form" id="form-pago">
+                {% csrf_token %}
+                {{ pago_form.non_field_errors }}
+
+                <div class="pago-form-grid">
+                    <div class="form-group">
+                        <label>Número de pago</label>
+                        <input type="number"
+                               value="{{ siguiente_numero_pago }}"
+                               readonly
+                               class="input-readonly"
+                               id="numero-pago-display">
+                    </div>
+
+                    <div class="form-group">
+                        {{ pago_form.fecha_vencimiento.label_tag }}
+                        {{ pago_form.fecha_vencimiento }}
+                        {{ pago_form.fecha_vencimiento.errors }}
+                    </div>
+
+                    <div class="pago-monto-wrapper">
+                        <div class="form-group pago-monto-col">
+                            {{ pago_form.monto.label_tag }}
+                            <div class="input-with-prefix">
+                                <span class="input-prefix">$</span>
+                                {{ pago_form.monto }}
+                            </div>
+                            {{ pago_form.monto.errors }}
+                        </div>
+
+                        <div class="form-group pago-monto-col">
+                            <label>Restante</label>
+                            <div id="restante-box"
+                                 data-base-restante="{{ total_pendiente }}"
+                                 data-tipo="{{ movimiento.tipo }}"
+                                 class="restante-box">
+                                ${{ total_pendiente|floatformat:2|intcomma }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        {{ pago_form.fecha_pago.label_tag }}
+                        {{ pago_form.fecha_pago }}
+                        {{ pago_form.fecha_pago.errors }}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                    Guardar pago
+                </button>
+            </form>
+        </div> -->
+
+    </div>
+    {% endif %}
+
+    {# Tabla de pagos registrados o mensaje si no hay #}
+    <div class="table-container">
+        {% if pagos %}
+            <table id="tabla-pagos">
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="numero_pago"
+                            data-state="asc">
+                                # Pago
+                                <span class="orden-icon">▲</span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="fecha_vencimiento"
+                            data-state="off">
+                                Fecha de vencimiento
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="monto"
+                            data-state="off">
+                                Monto
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="fecha_pago"
+                            data-state="off">
+                                Fecha de pago
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="esta_pagado"
+                            data-state="off">
+                                Pagado
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for pago in pagos %}
+                    <tr>
+                        <td>
+                            {% if puede_editar %}
+                            <a href="{% url 'core:pago_editar' movimiento.id pago.id %}"
+                                class="tabla-pago-edit"
+                                title="Editar pago {{ pago.numero_pago }}">
+                                &#9998;
+                            </a>
+                            {% endif %}
+                            <span>#{{ pago.numero_pago }}</span>
+                        </td>
+
+                        <td>{{ pago.fecha_vencimiento }}</td>
+                        <td>${{ pago.monto|floatformat:2|intcomma }}</td>
+                        <td>
+                            {% if pago.fecha_pago %}
+                                {{ pago.fecha_pago }}
+                            {% else %}
+                                ---
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pago.esta_pagado %}True{% else %}False{% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align:center; color:var(--color-text-light);">
+                            Aún no se ha registrado ningún pago relacionado con este movimiento.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="text-align:center; color:var(--color-text-light); padding: 12px 0;">
+                Aún no se ha registrado ningún pago relacionado con este movimiento.
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+
+<!-- JS para el input de movimiento de calculadora -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const formPago = document.getElementById("form-pago");
+    const montoInput = document.getElementById("id_monto");
+    const restanteBox = document.getElementById("restante-box");
+
+    function formatMoney(value) {
+        if (isNaN(value)) value = 0;
+        const sign = value < 0 ? "-" : "";
+        const abs = Math.abs(value);
+        return sign + abs.toLocaleString("es-MX", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function updateRestante() {
+        if (!restanteBox || !montoInput) return;
+
+        const baseRestante = parseFloat(restanteBox.dataset.baseRestante);
+        const tipoMov = restanteBox.dataset.tipo;  // "ACTIVO" o "PASIVO"
+
+        const raw = montoInput.value.replace(/,/g, "");
+        const monto = parseFloat(raw) || 0;
+        const restante = baseRestante - monto;
+
+        restanteBox.textContent = "$" + formatMoney(restante);
+
+        // Amarillo por defecto
+        restanteBox.style.backgroundColor = "rgba(245, 158, 11, 0.1)";
+        restanteBox.style.color = "#92400E";
+
+        if (restante === 0) {
+            restanteBox.style.backgroundColor = "rgba(16, 185, 129, 0.1)";
+            restanteBox.style.color = "#047857";
+        } else if (restante < 0) {
+            if (tipoMov === "PASIVO") {
+                restanteBox.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
+                restanteBox.style.color = "#1D4ED8";
+            } else {
+                restanteBox.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+                restanteBox.style.color = "#B91C1C";
+            }
+        }
+    }
+
+    // Formato calculadora en el monto del pago
+    if (montoInput) {
+        montoInput.value = "00.00";  // estado inicial
+        montoInput.addEventListener("input", function (e) {
+            const input = e.target;
+
+            let digits = input.value.replace(/\D/g, "");
+
+            if (!digits) {
+                input.value = "00.00";
+                updateRestante();
+                return;
+            }
+
+            let cents = parseInt(digits, 10);
+            let intPart = Math.floor(cents / 100);
+            let decPart = cents % 100;
+
+            let decStr = decPart.toString().padStart(2, "0");
+
+            let intStr;
+            if (intPart < 100) {
+                intStr = intPart.toString().padStart(2, "0");
+            } else {
+                intStr = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+
+            input.value = intStr + "." + decStr;
+            updateRestante();
+        });
+    }
+
+    // Limpiar comas antes de enviar
+    if (formPago && montoInput) {
+        formPago.addEventListener("submit", function () {
+            montoInput.value = montoInput.value.replace(/,/g, "");
+        });
+    }
+
+    updateRestante();
+});
+</script>
+
+<!-- JS para ordenar los pagos sin recargar el sitio -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const table = document.getElementById("tabla-pagos");
+    if (!table) return;
+
+    const tbody = table.querySelector("tbody");
+    const headers = table.querySelectorAll(".tabla-sort");
+
+    let currentField = "numero_pago";
+    let currentDir = "asc";
+
+    function getKey(row, field) {
+        const ds = row.dataset;
+        if (field === "numero_pago") {
+            return parseInt(ds.numeroPago || "0", 10);
+        }
+        if (field === "monto") {
+            return parseFloat(ds.monto || "0");
+        }
+        if (field === "esta_pagado") {
+            return parseInt(ds.estaPagado || "0", 10); // 0 / 1
+        }
+        if (field === "fecha_vencimiento") {
+            return ds.fechaVencimiento || "";
+        }
+        if (field === "fecha_pago") {
+            return ds.fechaPago || "";
+        }
+        return "";
+    }
+
+    function sortBy(field, dir) {
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort(function (a, b) {
+            const va = getKey(a, field);
+            const vb = getKey(b, field);
+            if (va === vb) return 0;
+            if (dir === "asc") {
+                return va > vb ? 1 : -1;
+            } else {
+                return va < vb ? 1 : -1;
+            }
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    }
+
+    function updateHeaderStates() {
+        headers.forEach(function (h) {
+            const state = h.dataset.state || "off";
+            const icon = h.querySelector(".orden-icon");
+            if (!icon) return;
+            if (state === "asc") {
+                icon.textContent = "▲";
+            } else if (state === "desc") {
+                icon.textContent = "▼";
+            } else {
+                icon.textContent = "";
+            }
+        });
+    }
+
+    headers.forEach(function (h) {
+        h.addEventListener("click", function (e) {
+            e.preventDefault();
+
+            const field = h.dataset.field;
+            let state = h.dataset.state || "off";
+
+            // Ciclo: off -> asc -> desc -> off
+            if (state === "off") {
+                state = "asc";
+            } else if (state === "asc") {
+                state = "desc";
+            } else {
+                state = "off";
+            }
+
+            // Apagar otros encabezados
+            headers.forEach(function (other) {
+                if (other !== h) {
+                    other.dataset.state = "off";
+                }
+            });
+
+            h.dataset.state = state;
+
+            if (state === "off") {
+                currentField = "numero_pago";
+                currentDir = "asc";
+            } else {
+                currentField = field;
+                currentDir = state;
+            }
+
+            sortBy(currentField, currentDir);
+            updateHeaderStates();
+        });
+    });
+
+    // Orden inicial: número de pago ascendente
+    sortBy(currentField, currentDir);
+    updateHeaderStates();
+});
+</script>
+
+{% endblock %}

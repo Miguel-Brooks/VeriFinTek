@@ -1,5 +1,4 @@
 {% extends "core/base.html" %}
-
 {% load humanize %}
 
 {% block title %}SIGEC | Balance Consolidado{% endblock %}
@@ -9,12 +8,10 @@
     <div>
         <h2>Balance Consolidado</h2>
         <p>
-            Visualiza el balance general consolidado de todas las sub-empresas
-            {% if empresa_actual %}de <strong>{{ empresa_actual.nombre }}</strong>{% endif %}.
-            {% if subempresa_actual %}
-                Visualiza el balance general de {{ empresa_actual.nombre }} ({{ subempresa_actual.nombre }}).
-            {% else %}
-                Visualiza el balance general consolidado de todas las sub-empresas de {{ empresa_actual.nombre }}.
+            Visualiza el balance general consolidado de las sub-empresas.
+            {% if empresa_actual %}
+                (Empresa: <strong>{{ empresa_actual.nombre }}</strong>
+                {% if subempresa_actual %} / Sub-empresa: <strong>{{ subempresa_actual.nombre }}</strong>{% endif %})
             {% endif %}
         </p>
     </div>
@@ -25,182 +22,154 @@
 {% endblock %}
 
 {% block content %}
-<div class="metric-grid">
-    <div class="card" style="border-top: 4px solid var(--color-accent-green);">
-        <h3>Total Activos</h3>
-        <div class="value">
-            ${{ total_activos|floatformat:2|intcomma }}
-        </div>
-    </div>
-    <div class="card" style="border-top: 4px solid var(--color-danger-red);">
-        <h3>Total Pasivos</h3>
-        <div class="value">
-            ${{ total_pasivos|floatformat:2|intcomma }}
-        </div>
-    </div>
-    <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
-        <h3>Total Capital</h3>
-        <div class="value">
-            ${{ total_capital|floatformat:2|intcomma }}
-        </div>
-    </div>
-</div>
 
-<div class="card"
-     style="min-height: 350px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
-    <h3>Distribución por Sub-empresa</h3>
-
-    {% if balance_detallado %}
-        <canvas id="balanceChart" style="max-height: 380px;"></canvas>
-    {% else %}
-        <p style="text-align:center; color: var(--color-text-light); margin-top: 20px;">
-            No hay datos suficientes para generar la gráfica.
+{% if not empresa_actual %}
+    <div class="card">
+        <p>
+            Selecciona primero una <strong>empresa / sub-empresa</strong>
+            en el menú de la izquierda para consultar el reporte financiero.
         </p>
-    {% endif %}
-</div>
+    </div>
+{% else %}
 
-<div class="card">
-    <h3>Balance General Detallado</h3>
-    <div class="table-container">
-        <table>
-            <thead>
-            <tr>
-                <th>Sub-Empresa</th>
-                <th>Activos ($)</th>
-                <th>Pasivos ($)</th>
-                <th>Capital ($)</th>
-                <th>Ratio A/P</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% if balance_detallado %}
+    <div class="metric-grid">
+        <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+            <h3>Total Activos</h3>
+            <div class="value">
+                ${{ total_activos|floatformat:2|intcomma }}
+            </div>
+        </div>
+        <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+            <h3>Total Pasivos</h3>
+            <div class="value" style="color: var(--color-danger-red);">
+                ${{ total_pasivos|floatformat:2|intcomma }}
+            </div>
+        </div>
+        <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
+            <h3>Total Capital</h3>
+            <div class="value">
+                ${{ total_capital|floatformat:2|intcomma }}
+            </div>
+        </div>
+    </div>
 
-                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <div class="card"
+         style="min-height: 200px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
+        <p style="color: var(--color-text-light);">
+            [Área para gráfica de barras: comparativo de Activos, Pasivos y Capital por Sub-Empresa]
+        </p>
+    </div>
 
-                <script>
-                    (function () {
-                        const ctx = document.getElementById('balanceChart');
-                        if (!ctx) return;
-
-                        const labels = [
-                            {% for row in balance_detallado %}
-                                '{{ row.subempresa.nombre|escapejs }}'{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                        ];
-
-                        const dataActivos = [
-                            {% for row in balance_detallado %}
-                                {{ row.activos|default:0 }}{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                        ];
-
-                        const dataPasivos = [
-                            {% for row in balance_detallado %}
-                                {{ row.pasivos|default:0 }}{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                        ];
-
-                        const dataCapital = [
-                            {% for row in balance_detallado %}
-                                {{ row.capital|default:0 }}{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                        ];
-
-                        new Chart(ctx, {
-                            type: 'bar',
-                            data: {
-                                labels: labels,
-                                datasets: [
-                                    {
-                                        label: 'Activos',
-                                        data: dataActivos,
-                                    },
-                                    {
-                                        label: 'Pasivos',
-                                        data: dataPasivos,
-                                    },
-                                    {
-                                        label: 'Capital',
-                                        data: dataCapital,
-                                    }
-                                ]
-                            },
-                            options: {
-                                responsive: true,
-                                scales: {
-                                    x: { stacked: false },
-                                    y: {
-                                        beginAtZero: true,
-                                        ticks: {
-                                            callback: function(value) {
-                                                return '$' + value.toLocaleString();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    })();
-                </script>
-
-                {% if total_activos or total_pasivos %}
-                <div class="card" style="margin-top: 20px;">
-                <h3>Resumen escrito del balance</h3>
-                <p>
-                    Para la empresa <strong>{{ empresa_actual.nombre }}</strong>
-                    {% if subempresa_actual %} y la sub-empresa <strong>{{ subempresa_actual.nombre }}</strong>{% endif %}
-                    se tienen activos por <strong>${{ total_activos|floatformat:2|intcomma }}</strong>,
-                    pasivos por <strong>${{ total_pasivos|floatformat:2|intcomma }}</strong>
-                    y un capital resultante de <strong>${{ total_capital|floatformat:2|intcomma }}</strong>.
-                </p>
-                
-                </div>
-                {% endif %}
-
-                
-                {% for fila in balance_detallado %}
+    <div class="card">
+        <h3>Balance General Detallado por Sub-empresa</h3>
+        <div class="table-container">
+            <table>
+                <thead>
+                <tr>
+                    <th>Sub-empresa</th>
+                    <th>Activos ($)</th>
+                    <th>Pasivos ($)</th>
+                    <th>Capital ($)</th>
+                    <th>Ratio A/P</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% if balance_detallado %}
+                    {% for row in balance_detallado %}
+                        <tr {% if not subempresa_actual and forloop.last %}style="font-weight:600; background-color:#F3F4F6;"{% endif %}>
+                            <td>
+                                {% if subempresa_actual %}
+                                    {{ row.subempresa.nombre }}
+                                {% else %}
+                                    {{ row.subempresa.nombre }}
+                                {% endif %}
+                            </td>
+                            <td>{{ row.activos|floatformat:2|intcomma }}</td>
+                            <td>{{ row.pasivos|floatformat:2|intcomma }}</td>
+                            <td>{{ row.capital|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if row.ratio_ap %}
+                                    {{ row.ratio_ap|floatformat:2 }}
+                                {% else %}
+                                    –
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
                     <tr>
-                        <td>{{ fila.subempresa.nombre }}</td>
-                        <td>${{ fila.activos|floatformat:2|intcomma }}</td>
-                        <td>${{ fila.pasivos|floatformat:2|intcomma }}</td>
-                        <td>${{ fila.capital|floatformat:2|intcomma }}</td>
-                        <td>
-                            {% if fila.ratio_ap %}
-                                {{ fila.ratio_ap|floatformat:2 }}
-                            {% else %}
-                                –
-                            {% endif %}
+                        <td colspan="5" style="text-align:center; color:var(--color-text-light);">
+                            No hay datos de balance para este contexto.
                         </td>
                     </tr>
-                {% endfor %}
-                <tr style="font-weight: 600; background-color: #F3F4F6;">
-                    <td>Total Consolidado</td>
-                    <td style="color: var(--color-accent-green);">
-                        ${{ total_activos|floatformat:2|intcomma }}
-                    </td>
-                    <td style="color: var(--color-danger-red);">
-                        ${{ total_pasivos|floatformat:2|intcomma }}
-                    </td>
-                    <td style="color: var(--color-primary-blue);">
-                        ${{ total_capital|floatformat:2|intcomma }}
-                    </td>
-                    <td>
-                        {% if ratio_ap_total %}
-                            {{ ratio_ap_total|floatformat:2 }}
-                        {% else %}
-                            –
-                        {% endif %}
-                    </td>
-                </tr>
-            {% else %}
-                <tr>
-                    <td colspan="5" style="text-align:center; color:var(--color-text-light);">
-                        No hay información de balance disponible para el contexto seleccionado.
-                    </td>
-                </tr>
-            {% endif %}
-            </tbody>
-        </table>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+
+    <div class="card" style="margin-top: 30px;">
+        <h3>Movimientos detallados</h3>
+        <p style="color: var(--color-text-light); margin-bottom: 8px;">
+            Cada fila representa un movimiento financiero individual dentro del contexto seleccionado.
+        </p>
+        <div class="table-container">
+            <table>
+                <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Folio</th>
+                    <th>Tipo</th>
+                    <th>Concepto</th>
+                    <th>Sub-empresa</th>
+                    <th>Estado</th>
+                    <th>Monto</th>
+                    <th>Capturado por</th>
+                    <th>Detalle</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% if movimientos_detalle %}
+                    {% for mov in movimientos_detalle %}
+                        <tr>
+                            <td>{{ mov.fecha_registro }}</td>
+                            <td>{{ mov.folio|default:"—" }}</td>
+                            <td>{{ mov.get_tipo_display }}</td>
+                            <td>{{ mov.concepto.nombre }}</td>
+                            <td>
+                                {% if mov.subempresa %}
+                                    {{ mov.subempresa.nombre }}
+                                {% else %}
+                                    –
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.get_estado_display }}</td>
+                            <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if mov.usuario_captura %}
+                                    {{ mov.usuario_captura.get_username }}
+                                {% else %}
+                                    –
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'core:movimiento_detalle' mov.id %}" class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                    Ver detalle
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="9" style="text-align:center; color:var(--color-text-light);">
+                            No hay movimientos registrados para este contexto.
+                        </td>
+                    </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endif %}
 {% endblock %}

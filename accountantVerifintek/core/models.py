@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+from django.db.models import UniqueConstraint
 
 
 class Empresa(models.Model):
@@ -90,13 +92,7 @@ class EmpresaSubempresa(models.Model):
     def __str__(self) -> str:
         return f"{self.empresa} -> {self.subempresa}"
 
-
 class UsuarioEmpresa(models.Model):
-    """
-    Relación muchos-a-muchos entre Usuario y Empresa,
-    con rol y permisos por empresa.
-    """
-
     class Rol(models.TextChoices):
         ADMIN = "ADMIN", "Admin"
         FINANCIERO = "FINANCIERO", "Financiero / Capturista"
@@ -118,15 +114,16 @@ class UsuarioEmpresa(models.Model):
         default=Rol.FINANCIERO,
     )
 
+    # Una fila puede ser “todas las subempresas” (subempresa = NULL)
+    # o una subempresa concreta
     subempresa = models.ForeignKey(
         Subempresa,
-        on_delete=models.SET_NULL, 
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="usuarios_asignados",
     )
 
-    # Permisos básicos por empresa (R, W, L)
     puede_leer = models.BooleanField(default=True)
     puede_escribir = models.BooleanField(default=False)
     puede_listar_reportes = models.BooleanField(default=False)
@@ -137,7 +134,30 @@ class UsuarioEmpresa(models.Model):
     class Meta:
         verbose_name = "Usuario por empresa"
         verbose_name_plural = "Usuarios por empresa"
-        unique_together = ("usuario", "empresa")
+        constraints = [
+            # No duplicar la misma combinación usuario/empresa/subempresa
+            UniqueConstraint(
+                fields=["usuario", "empresa", "subempresa"],
+                name="unique_usuario_empresa_subempresa",
+            ),
+        ]
+
+    def clean(self):
+        """
+        Un usuario solo puede pertenecer a una empresa padre.
+        Permitimos varias filas para distintas subempresas de esa empresa.
+        """
+        super().clean()
+        if not self.usuario_id or not self.empresa_id:
+            return
+
+        qs = UsuarioEmpresa.objects.filter(usuario=self.usuario).exclude(pk=self.pk)
+        otras_empresas = qs.exclude(empresa=self.empresa)
+        if otras_empresas.exists():
+            raise ValidationError(
+                "Un usuario solo puede pertenecer a una empresa padre. "
+                "Elimina o ajusta las membresías existentes."
+            )
 
     def __str__(self) -> str:
         if self.subempresa:
@@ -181,6 +201,11 @@ class Movimiento(models.Model):
         MENSUAL = "MENSUAL", "Mensual"
         ANUAL = "ANUAL", "Anual"
 
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        APROBADO = "APROBADO", "Aprobado"
+        CANCELADO = "CANCELADO", "Cancelado"
+
     empresa = models.ForeignKey(
         Empresa,
         on_delete=models.CASCADE,
@@ -212,6 +237,26 @@ class Movimiento(models.Model):
         related_name="movimientos",
     )
 
+    # NUEVOS CAMPOS PARA REPORTES / BÚSQUEDA
+    folio = models.CharField(
+        max_length=50,
+        blank=True,
+        db_index=True,
+        help_text="Folio o referencia externa opcional, útil para búsquedas y reportes.",
+    )
+    descripcion = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Descripción corta que aparecerá en los reportes detallados.",
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+        db_index=True,
+        help_text="Estado del movimiento para flujos de aprobación.",
+    )
+
     monto_total = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -229,7 +274,7 @@ class Movimiento(models.Model):
     frecuencia_pago = models.CharField(
         max_length=10,
         choices=FrecuenciaPago.choices,
-        default=FrecuenciaPago.MENSUAL,
+        default=FrecuenciaPago.UNICO,
     )
 
     observaciones = models.TextField(blank=True)
@@ -241,6 +286,33 @@ class Movimiento(models.Model):
         verbose_name = "Movimiento"
         verbose_name_plural = "Movimientos"
         ordering = ["-fecha_registro", "-id"]
+        indexes = [
+            # Para filtros por empresa/subempresa + fecha en reportes
+            models.Index(
+                fields=["empresa", "subempresa", "fecha_registro"],
+                name="mov_emp_sub_fecha_idx",
+            ),
+            # Para filtros por tipo en una empresa
+            models.Index(
+                fields=["empresa", "tipo"],
+                name="mov_emp_tipo_idx",
+            ),
+            # Para reportes por concepto
+            models.Index(
+                fields=["empresa", "concepto"],
+                name="mov_emp_concepto_idx",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        """Genera folio automáticamente al crear el movimiento."""
+        creating = self.pk is None
+        super().save(*args, **kwargs)
+        if creating and not self.folio:
+            # 001 = Activo, 010 = Pasivo
+            prefix = "001" if self.tipo == self.TipoMovimiento.ACTIVO else "010"
+            self.folio = f"{prefix}{self.pk}"
+            super().save(update_fields=["folio"])
 
     def __str__(self) -> str:
         return f"{self.get_tipo_display()} - {self.concepto} ({self.monto_total})"
@@ -252,15 +324,10 @@ class Pago(models.Model):
         on_delete=models.CASCADE,
         related_name="pagos",
     )
-    numero_pago = models.PositiveIntegerField(
-        help_text="Consecutivo del pago dentro del movimiento.",
-    )
-    fecha_vencimiento = models.DateField()
-    monto = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-    )
-    esta_pagado = models.BooleanField(default=False)
+    numero_pago = models.PositiveIntegerField()
+    fecha_vencimiento = models.DateField(db_index=True)
+    monto = models.DecimalField(max_digits=20, decimal_places=4)
+    esta_pagado = models.BooleanField(default=False, db_index=True)
     fecha_pago = models.DateField(null=True, blank=True)
 
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -271,6 +338,13 @@ class Pago(models.Model):
         verbose_name_plural = "Pagos"
         ordering = ["fecha_vencimiento", "numero_pago"]
         unique_together = ("movimiento", "numero_pago")
-
-    def __str__(self) -> str:
-        return f"Pago {self.numero_pago} de {self.movimiento_id}"
+        indexes = [
+            models.Index(
+                fields=["movimiento", "fecha_vencimiento"],
+                name="pago_mov_fecha_idx",
+            ),
+            models.Index(
+                fields=["fecha_vencimiento", "esta_pagado"],
+                name="pago_fecha_pagado_idx",
+            ),
+        ]
