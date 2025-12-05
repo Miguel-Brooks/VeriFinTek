@@ -1,5 +1,4 @@
 {% extends "core/base.html" %}
-
 {% load humanize %}
 
 {% block title %}SIGEC | Panel General{% endblock %}
@@ -7,76 +6,460 @@
 {% block header %}
 <h2>Panel General</h2>
 <p>
-    Resumen del sistema de gestión empresarial en tiempo real
+    Resumen operativo y estratégico
     {% if empresa_actual %}
         para <strong>{{ empresa_actual.nombre }}</strong>
         {% if subempresa_actual %}( {{ subempresa_actual.nombre }} ){% endif %}
-    {% endif %}.
+    {% else %}
+        (selecciona primero una empresa en el menú izquierdo).
+    {% endif %}
 </p>
 {% endblock %}
 
 {% block content %}
-<div class="metric-grid">
+
+{# ------------------ BARRA DE FILTROS GLOBALES ------------------ #}
+<div class="card" style="margin-bottom: 24px;">
+    <h3>Control de filtros</h3>
+    <form method="get"
+          style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin-top:8px;">
+        <div style="min-width:180px;">
+            <label for="rango" class="label">Rango de fechas</label>
+            <select name="rango" id="rango" class="input">
+                <option value="mes_actual" {% if filtro_rango == "mes_actual" %}selected{% endif %}>
+                    Este mes
+                </option>
+                <option value="ultimos_30" {% if filtro_rango == "ultimos_30" %}selected{% endif %}>
+                    Últimos 30 días
+                </option>
+                <option value="personalizado" {% if filtro_rango == "personalizado" %}selected{% endif %}>
+                    Personalizado
+                </option>
+            </select>
+        </div>
+
+        <div style="min-width:160px;">
+            <label class="label">Desde</label>
+            <input type="date" name="desde" class="input"
+                   value="{% if fecha_desde %}{{ fecha_desde|date:'Y-m-d' }}{% endif %}">
+        </div>
+        <div style="min-width:160px;">
+            <label class="label">Hasta</label>
+            <input type="date" name="hasta" class="input"
+                   value="{% if fecha_hasta %}{{ fecha_hasta|date:'Y-m-d' }}{% endif %}">
+        </div>
+
+        <div style="min-width:180px;">
+            <label for="estado_pago" class="label">Estado de pago (flujo)</label>
+            <select name="estado_pago" id="estado_pago" class="input">
+                <option value="todos" {% if filtro_estado_pago == "todos" %}selected{% endif %}>Todos</option>
+                <option value="pagados" {% if filtro_estado_pago == "pagados" %}selected{% endif %}>Pagados</option>
+                <option value="pendientes" {% if filtro_estado_pago == "pendientes" %}selected{% endif %}>Pendientes</option>
+                <option value="vencidos" {% if filtro_estado_pago == "vencidos" %}selected{% endif %}>Vencidos</option>
+            </select>
+        </div>
+
+        <div style="min-width:220px;">
+            <label for="concepto" class="label">Concepto</label>
+            <select name="concepto" id="concepto" class="input">
+                <option value="">Todos los conceptos</option>
+                {% for c in conceptos_disponibles %}
+                    <option value="{{ c.id }}"
+                        {% if filtro_concepto_id|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>
+                        {{ c.nombre }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <button type="submit" class="btn btn-primary">
+                Aplicar filtros
+            </button>
+        </div>
+    </form>
+</div>
+
+{# ------------------ RESUMEN RÁPIDO ------------------ #}
+<div class="metric-grid" style="margin-bottom: 24px;">
     <div class="card">
-        <h3>Sub-Empresas Activas</h3>
+        <h3>Sub-empresas activas</h3>
         <div class="value">
             {{ total_subempresas_activas|default:0 }}
         </div>
     </div>
     <div class="card">
-        <h3>Reportes Aprobados (Mes)</h3>
-        <div class="value" style="color: var(--color-accent-green);">
-            {{ total_reportes_aprobados|default:0 }}
-        </div>
-    </div>
-    <div class="card">
-        <h3>Pendientes de Revisión</h3>
-        <div class="value" style="color: var(--color-warning-yellow);">
-            {{ total_pendientes_revision|default:0 }}
-        </div>
-    </div>
-    <div class="card">
-        <h3>Balance Total</h3>
+        <h3>Balance total histórico</h3>
         <div class="value" style="color: var(--color-primary-blue);">
             ${{ balance_total|floatformat:2|intcomma }}
         </div>
     </div>
-</div>
-
-<div class="card" style="margin-bottom: 40px;">
-    <h3>Acciones Rápidas</h3>
-    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-        <a href="{% url 'core:captura' %}?open_modal=1" class="btn btn-primary">
-            + Nuevo movimiento
-        </a>
-
-        <a href="{% url 'core:balance' %}" class="btn"
-           style="background-color: #F3F4F6; color: var(--color-text-dark);">
-            <i class="fas fa-chart-area"></i> Generar Balance Consolidado
-        </a>
+    <div class="card">
+        <h3>Rango aplicado</h3>
+        <div class="value" style="font-size: 0.95rem;">
+            {% if fecha_desde and fecha_hasta %}
+                {{ fecha_desde|date:"d/m/Y" }} – {{ fecha_hasta|date:"d/m/Y" }}
+            {% else %}
+                Sin rango
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<div class="card">
-    <h3>Aprobaciones Pendientes</h3>
-
-    {% if aprobaciones_pendientes %}
-        {% for rep in aprobaciones_pendientes %}
-            <div class="flow-item" style="border-left-color: var(--color-accent-blue);">
-                <div class="flow-details">
-                    <h4>{{ rep.titulo }}</h4>
-                    <p>Capturado por: {{ rep.capturado_por }}</p>
-                </div>
-                <span class="status-tag status-revision">
-                    {{ rep.estado_legible }}
-                </span>
+{# ------------------ GRÁFICAS PRINCIPALES ------------------ #}
+<div class="grid-2" style="margin-bottom: 32px;">
+    <div class="chart-card">
+        <h3>Flujo de caja por fecha (sub-empresa)</h3>
+        {% if not subempresa_actual %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                Selecciona una sub-empresa para ver la gráfica de flujo de caja.
+            </p>
+        {% elif not flujo_caja_pagos %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                No hay pagos en el rango y filtros seleccionados.
+            </p>
+        {% else %}
+            <div class="chart-container">
+                <vas id="charttFlujoCaja"></canvas>
             </div>
-        {% endfor %}
-    {% else %}
-        <p style="color: var(--color-text-light);">
-            No hay aprobaciones pendientes por el momento.
-        </p>
-    {% endif %}
-</div>
-{% endblock %}
+        {% endif %}
+    </div>
 
+    <div class="chart-card">
+        <h3>Distribución por conceptos (empresa)</h3>
+        {% if not desglose_conceptos %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                No hay movimientos devengados en el rango seleccionado.
+            </p>
+        {% else %}
+            <div class="chart-container">
+                <vas id="charttConceptos"></canvas>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------ NIVEL SUB-EMPRESA (OPERATIVO) ------------------ #}
+<div class="grid-2" style="margin-bottom:32px;">
+    <div class="card">
+        <h3>Flujo de caja proyectado</h3>
+        {% if not subempresa_actual %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                Selecciona una sub-empresa en el menú lateral para ver el flujo de caja operativo.
+            </p>
+        {% else %}
+            {% if flujo_caja_pagos %}
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha venc.</th>
+                                <th>Folio</th>
+                                <th>Concepto</th>
+                                <th>Tipo</th>
+                                <th>Monto cuota</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in flujo_caja_pagos %}
+                                <tr>
+                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}">
+                                            {{ p.movimiento.folio|default:"—" }}
+                                        </a>
+                                    </td>
+                                    <td>{{ p.movimiento.concepto.nombre }}</td>
+                                    <td>
+                                        {% if p.movimiento.tipo == "ACTIVO" %}
+                                            <span style="color:#16A34A; font-weight:600;">Ingreso</span>
+                                        {% else %}
+                                            <span style="color:#DC2626; font-weight:600;">Egreso</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <span class="status-tag"
+                                              style="background-color: {{ p.estado_color }}22;
+                                                     color: {{ p.estado_color }};
+                                                     border-radius: 999px;
+                                                     padding: 2px 10px;
+                                                     font-size: 0.8rem;">
+                                            {{ p.estado_label }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:pago_editar' p.movimiento.id p.id %}"
+                                           class="btn btn-small">
+                                            Registrar pago
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="color: var(--color-text-light); margin-top:8px;">
+                    No hay pagos en el rango y filtros seleccionados.
+                </p>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Cuentas por cobrar (cartera)</h3>
+        {% if not subempresa_actual %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                Selecciona una sub-empresa para ver sus cuentas por cobrar.
+            </p>
+        {% else %}
+            {% if cxc_pagos %}
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Días de retraso</th>
+                                <th>Fecha venc.</th>
+                                <th>Folio</th>
+                                <th>Cliente / Ref</th>
+                                <th>Monto</th>
+                                <th>Progreso</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in cxc_pagos %}
+                                <tr>
+                                    <td>
+                                        {% if p.dias_retraso < 0 %}
+                                            Por vencer ({{ p.dias_retraso_abs }} días)
+                                        {% elif p.dias_retraso == 0 %}
+                                            Hoy
+                                        {% else %}
+                                            {{ p.dias_retraso }} días
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}">
+                                            {{ p.movimiento.folio|default:"—" }}
+                                        </a>
+                                    </td>
+                                    <td>{{ p.movimiento.descripcion|default:"—" }}</td>
+                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        Pago {{ p.numero_pago }} de {{ p.movimiento.numero_pagos }}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:pago_editar' p.movimiento.id p.id %}"
+                                           class="btn btn-small">
+                                            Registrar cobro
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="color: var(--color-text-light); margin-top:8px;">
+                    No hay cuentas por cobrar pendientes en el rango seleccionado.
+                </p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------ NIVEL EMPRESA (ESTRATÉGICO) ------------------ #}
+<div class="grid-2">
+    <div class="card">
+        <h3>Rentabilidad por sub-empresa</h3>
+        {% if reporte_subempresas %}
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Sub-empresa</th>
+                            <th>Ingresos cobrados</th>
+                            <th>Egresos pagados</th>
+                            <th>Flujo neto real</th>
+                            <th>Deuda pendiente</th>
+                            <th>Salud</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in reporte_subempresas %}
+                            <tr>
+                                <td>{{ row.subempresa.nombre }}</td>
+                                <td>${{ row.ingresos_cobrados|floatformat:2|intcomma }}</td>
+                                <td>${{ row.egresos_pagados|floatformat:2|intcomma }}</td>
+                                <td
+                                    {% if row.flujo_neto_real > 0 %}
+                                        style="color:#16A34A;"
+                                    {% elif row.flujo_neto_real < 0 %}
+                                        style="color:#DC2626;"
+                                    {% endif %}
+                                >
+                                    ${{ row.flujo_neto_real|floatformat:2|intcomma }}
+                                </td>
+                                <td>${{ row.deuda_pendiente|floatformat:2|intcomma }}</td>
+                                <td>
+                                    <span class="status-tag"
+                                          style="background-color: {{ row.salud_color }}22;
+                                                 color: {{ row.salud_color }};
+                                                 border-radius: 999px;
+                                                 padding: 2px 10px;
+                                                 font-size: 0.8rem;">
+                                        {{ row.salud_label }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                No hay datos de pagos en el rango y filtros seleccionados.
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Desglose por conceptos (devengado)</h3>
+        {% if desglose_conceptos %}
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Total movimientos</th>
+                            <th>Monto total</th>
+                            <th>% del total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in desglose_conceptos %}
+                            <tr>
+                                <td>{{ row.concepto }}</td>
+                                <td>{{ row.total_movimientos }}</td>
+                                <td>${{ row.monto_total|floatformat:2|intcomma }}</td>
+                                <td>{{ row.porcentaje|floatformat:2 }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="color: var(--color-text-light); margin-top:8px;">
+                No hay movimientos devengados en el rango y filtros seleccionados.
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+{# ------------------ SCRIPTS DE GRÁFICAS (Chart.js) ------------------ #}
+{% if flujo_caja_pagos or desglose_conceptos or reporte_subempresas %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // === Gráfica de flujo de caja proyectado (sub-empresa) ===
+            var ctxFlujo = document.getElementById("chartFlujoCaja");
+            if (ctxFlujo) {
+                var flujoLabels = [];
+                var flujoIngresos = [];
+                var flujoEgresos = [];
+                {% for p in flujo_caja_pagos %}
+                    flujoLabels.push("{{ p.fecha_vencimiento|date:'d/m' }}");
+                    {% if p.movimiento.tipo == "ACTIVO" %}
+                        flujoIngresos.push({{ p.monto|floatformat:2 }});
+                        flujoEgresos.push(0);
+                    {% else %}
+                        flujoIngresos.push(0);
+                        flujoEgresos.push({{ p.monto|floatformat:2 }});
+                    {% endif %}
+                {% endfor %}
+
+                if (flujoLabels.length > 0) {
+                    new Chart(ctxFlujo, {
+                        type: "bar",
+                        data: {
+                            labels: flujoLabels,
+                            datasets: [
+                                {
+                                    label: "Ingresos proyectados",
+                                    data: flujoIngresos,
+                                    backgroundColor: "rgba(16, 185, 129, 0.6)",
+                                    borderColor: "rgba(16, 185, 129, 1)",
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: "Egresos proyectados",
+                                    data: flujoEgresos,
+                                    backgroundColor: "rgba(239, 68, 68, 0.6)",
+                                    borderColor: "rgba(239, 68, 68, 1)",
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // === Gráfica de conceptos (empresa) ===
+            var ctxConceptos = document.getElementById("chartConceptos");
+            if (ctxConceptos) {
+                var conceptosLabels = [];
+                var conceptosData = [];
+                {% for row in desglose_conceptos %}
+                    conceptosLabels.push("{{ row.concepto|escapejs }}");
+                    conceptosData.push({{ row.monto_total|floatformat:2 }});
+                {% endfor %}
+
+                if (conceptosLabels.length > 0) {
+                    new Chart(ctxConceptos, {
+                        type: "doughnut",
+                        data: {
+                            labels: conceptosLabels,
+                            datasets: [{
+                                data: conceptosData,
+                                backgroundColor: [
+                                    "#1D4ED8",
+                                    "#10B981",
+                                    "#F59E0B",
+                                    "#EF4444",
+                                    "#6366F1",
+                                    "#14B8A6",
+                                    "#F97316"
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: "bottom"
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+{% endif %}
+
+{% endblock %}

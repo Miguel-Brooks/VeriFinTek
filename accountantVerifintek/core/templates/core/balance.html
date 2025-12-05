@@ -1,25 +1,46 @@
 {% extends "core/base.html" %}
 {% load humanize %}
 
-{% block title %}SIGEC | Balance Consolidado{% endblock %}
+{% block title %}SIGEC | Reportes financieros{% endblock %}
 
 {% block header %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
-    <div>
-        <h2>Balance Consolidado</h2>
-        <p>
-            Visualiza el balance general consolidado de las sub-empresas.
-            {% if empresa_actual %}
-                (Empresa: <strong>{{ empresa_actual.nombre }}</strong>
-                {% if subempresa_actual %} / Sub-empresa: <strong>{{ subempresa_actual.nombre }}</strong>{% endif %})
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1.5rem;">
+        <div>
+            <h2>Reportes financieros</h2>
+            <p>
+                Vista consolidada y detalle operativo según el contexto seleccionado.
+                {% if empresa_actual %}
+                    (Empresa: <strong>{{ empresa_actual.nombre }}</strong>
+                    {% if subempresa_actual %} / Sub-empresa: <strong>{{ subempresa_actual.nombre }}</strong>{% endif %})
+                {% endif %}
+            </p>
+        </div>
+
+        <form method="get" action="{% url 'core:balance_exportar' %}"
+            style="display:flex; gap:8px; align-items:center;">
+            <!-- Mantener la pestaña y el rango seleccionados -->
+            <input type="hidden" name="vista" value="{{ vista_activa }}">
+            {% if detalle_desde %}
+                <input type="hidden" name="op_desde" value="{{ detalle_desde|date:'Y-m-d' }}">
             {% endif %}
-        </p>
+            {% if detalle_hasta %}
+                <input type="hidden" name="op_hasta" value="{{ detalle_hasta|date:'Y-m-d' }}">
+            {% endif %}
+
+            <label for="formato" style="font-size:0.85rem;">Formato:</label>
+            <select name="formato" id="formato" class="input">
+                <option value="csv">CSV</option>
+                <option value="txt">Texto plano</option>
+            </select>
+
+            <button type="submit" class="btn"
+                    style="background-color: var(--color-text-dark); color: var(--color-white);">
+                <i class="fas fa-file-download"></i> Exportar reporte
+            </button>
+        </form>
     </div>
-    <a href="#" class="btn" style="background-color: var(--color-text-dark); color: var(--color-white);">
-        <i class="fas fa-file-pdf"></i> Exportar PDF
-    </a>
-</div>
 {% endblock %}
+
 
 {% block content %}
 
@@ -32,143 +53,559 @@
     </div>
 {% else %}
 
-    <div class="metric-grid">
-        <div class="card" style="border-top: 4px solid var(--color-accent-green);">
-            <h3>Total Activos</h3>
-            <div class="value">
-                ${{ total_activos|floatformat:2|intcomma }}
-            </div>
-        </div>
-        <div class="card" style="border-top: 4px solid var(--color-danger-red);">
-            <h3>Total Pasivos</h3>
-            <div class="value" style="color: var(--color-danger-red);">
-                ${{ total_pasivos|floatformat:2|intcomma }}
-            </div>
-        </div>
-        <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
-            <h3>Total Capital</h3>
-            <div class="value">
-                ${{ total_capital|floatformat:2|intcomma }}
-            </div>
-        </div>
-    </div>
+    <!-- ===================================================== -->
+    <!-- 1) PESTAÑA INICIO / CONSOLIDADO (NIVEL EMPRESA) -->
+    <!-- ===================================================== -->
+    <div id="consolidado" style="scroll-margin-top: 80px; margin-top: 20px;">
+        <h3 style="margin-bottom: 12px;">Inicio / Consolidado (nivel empresa)</h3>
 
-    <div class="card"
-         style="min-height: 200px; margin-bottom: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">
-        <p style="color: var(--color-text-light);">
-            [Área para gráfica de barras: comparativo de Activos, Pasivos y Capital por Sub-Empresa]
-        </p>
-    </div>
+        <!-- Métricas clave (big numbers) -->
+        <div class="metric-grid">
+            <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
+                <h3>Saldo neto consolidado (hoy)</h3>
+                <div class="value">
+                    ${{ saldo_neto_consolidado|floatformat:2|intcomma }}
+                </div>
+                <p class="label">
+                    Capital inicial + todos los activos menos todos los pasivos de la empresa.
+                </p>
+            </div>
+            <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+                <h3>Total ingresos YTD</h3>
+                <div class="value">
+                    ${{ ingresos_ytd|floatformat:2|intcomma }}
+                </div>
+                <p class="label">Suma de todos los movimientos tipo Activo en el año en curso.</p>
+            </div>
+            <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+                <h3>Total egresos YTD</h3>
+                <div class="value" style="color: var(--color-danger-red);">
+                    ${{ egresos_ytd|floatformat:2|intcomma }}
+                </div>
+                <p class="label">Suma de todos los movimientos tipo Pasivo en el año en curso.</p>
+            </div>
+            <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
+                <h3>Flujo de caja neto YTD</h3>
+                <div class="value">
+                    ${{ flujo_neto_ytd|floatformat:2|intcomma }}
+                </div>
+                <p class="label">Ingresos YTD menos egresos YTD.</p>
+            </div>
+        </div>
 
-    <div class="card">
-        <h3>Balance General Detallado por Sub-empresa</h3>
-        <div class="table-container">
-            <table>
-                <thead>
-                <tr>
-                    <th>Sub-empresa</th>
-                    <th>Activos ($)</th>
-                    <th>Pasivos ($)</th>
-                    <th>Capital ($)</th>
-                    <th>Ratio A/P</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% if balance_detallado %}
-                    {% for row in balance_detallado %}
-                        <tr {% if not subempresa_actual and forloop.last %}style="font-weight:600; background-color:#F3F4F6;"{% endif %}>
-                            <td>
-                                {% if subempresa_actual %}
-                                    {{ row.subempresa.nombre }}
-                                {% else %}
-                                    {{ row.subempresa.nombre }}
-                                {% endif %}
-                            </td>
-                            <td>{{ row.activos|floatformat:2|intcomma }}</td>
-                            <td>{{ row.pasivos|floatformat:2|intcomma }}</td>
-                            <td>{{ row.capital|floatformat:2|intcomma }}</td>
-                            <td>
-                                {% if row.ratio_ap %}
-                                    {{ row.ratio_ap|floatformat:2 }}
-                                {% else %}
-                                    –
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                {% else %}
+        <!-- Alertas inmediatas -->
+        <div class="metric-grid" style="margin-top: 20px;">
+            <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+                <h3>Pagos vencidos (consolidado)</h3>
+                <div class="value" style="color: var(--color-danger-red);">
+                    {{ pagos_vencidos_consolidados }} pagos
+                </div>
+                <p class="label">
+                    Monto total vencido: ${{ monto_pagos_vencidos_consolidados|floatformat:2|intcomma }}<br>
+                    Ctas. por cobrar vencidas: ${{ cuentas_cobrar_vencidas|floatformat:2|intcomma }}<br>
+                    Pasivos vencidos: ${{ deuda_vencida|floatformat:2|intcomma }}
+                </p>
+            </div>
+            <div class="card">
+                <h3>Cuentas por cobrar vigentes</h3>
+                <div class="value">
+                    ${{ cuentas_cobrar_vigentes|floatformat:2|intcomma }}
+                </div>
+                <p class="label">
+                    Saldo a favor de la empresa aún dentro de plazo.
+                </p>
+            </div>
+            <div class="card">
+                <h3>Pasivos por pagar (no vencidos)</h3>
+                <div class="value">
+                    ${{ deuda_vigente|floatformat:2|intcomma }}
+                </div>
+                <p class="label">
+                    Obligaciones futuras pendientes de pago, todavía en tiempo.
+                </p>
+            </div>
+        </div>
+
+        <!-- Comparativa por sub-empresa -->
+        <div class="card" style="margin-top: 25px;">
+            <h3>Rendimiento por sub-empresa</h3>
+            <p class="label" style="margin-bottom: 8px;">
+                Ingresos (activos), egresos (pasivos) y flujo neto acumulado por sub-empresa.
+            </p>
+            <div class="table-container">
+                <table>
+                    <thead>
                     <tr>
-                        <td colspan="5" style="text-align:center; color:var(--color-text-light);">
-                            No hay datos de balance para este contexto.
-                        </td>
+                        <th>Sub-empresa</th>
+                        <th>Ingresos (Activos)</th>
+                        <th>Egresos (Pasivos)</th>
+                        <th>Flujo neto</th>
+                        <th>Ratio A/P</th>
                     </tr>
-                {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="card" style="margin-top: 30px;">
-        <h3>Movimientos detallados</h3>
-        <p style="color: var(--color-text-light); margin-bottom: 8px;">
-            Cada fila representa un movimiento financiero individual dentro del contexto seleccionado.
-        </p>
-        <div class="table-container">
-            <table>
-                <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Folio</th>
-                    <th>Tipo</th>
-                    <th>Concepto</th>
-                    <th>Sub-empresa</th>
-                    <th>Estado</th>
-                    <th>Monto</th>
-                    <th>Capturado por</th>
-                    <th>Detalle</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% if movimientos_detalle %}
-                    {% for mov in movimientos_detalle %}
+                    </thead>
+                    <tbody>
+                    {% if balance_detallado %}
+                        {% for row in balance_detallado %}
+                            <tr>
+                                <td>{{ row.subempresa.nombre }}</td>
+                                <td>${{ row.activos|floatformat:2|intcomma }}</td>
+                                <td>${{ row.pasivos|floatformat:2|intcomma }}</td>
+                                <td>${{ row.capital|floatformat:2|intcomma }}</td>
+                                <td>
+                                    {% if row.ratio_ap %}
+                                        {{ row.ratio_ap|floatformat:2 }}
+                                    {% else %}
+                                        –
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
                         <tr>
-                            <td>{{ mov.fecha_registro }}</td>
-                            <td>{{ mov.folio|default:"—" }}</td>
-                            <td>{{ mov.get_tipo_display }}</td>
-                            <td>{{ mov.concepto.nombre }}</td>
-                            <td>
-                                {% if mov.subempresa %}
-                                    {{ mov.subempresa.nombre }}
-                                {% else %}
-                                    –
-                                {% endif %}
-                            </td>
-                            <td>{{ mov.get_estado_display }}</td>
-                            <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
-                            <td>
-                                {% if mov.usuario_captura %}
-                                    {{ mov.usuario_captura.get_username }}
-                                {% else %}
-                                    –
-                                {% endif %}
-                            </td>
-                            <td>
-                                <a href="{% url 'core:movimiento_detalle' mov.id %}" class="btn" style="padding:4px 8px; font-size:0.8rem;">
-                                    Ver detalle
-                                </a>
+                            <td colspan="5" style="text-align:center; color:var(--color-text-light);">
+                                No hay datos de balance para este contexto.
                             </td>
                         </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="9" style="text-align:center; color:var(--color-text-light);">
-                            No hay movimientos registrados para este contexto.
-                        </td>
-                    </tr>
-                {% endif %}
-                </tbody>
-            </table>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% if ratio_ap_total %}
+            <p style="margin-top: 6px; color: var(--color-text-light);">
+                Ratio A/P consolidado: <strong>{{ ratio_ap_total|floatformat:2 }}</strong>.
+            </p>
+            {% endif %}
         </div>
+
+        <!-- Tendencia últimos 12 meses -->
+        <div class="card" style="margin-top: 25px;">
+            <h3>Tendencia de flujo de caja (últimos 12 meses)</h3>
+            <p class="label" style="margin-bottom: 8px;">
+                Serie mensual de ingresos, egresos y flujo neto, lista para graficarse.
+            </p>
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Mes</th>
+                        <th>Ingresos</th>
+                        <th>Egresos</th>
+                        <th>Flujo neto</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% if flujo_12m %}
+                        {% for row in flujo_12m %}
+                            <tr>
+                                <td>{{ row.mes|stringformat:"02d" }}/{{ row.anio }}</td>
+                                <td>${{ row.ingresos|floatformat:2|intcomma }}</td>
+                                <td>${{ row.egresos|floatformat:2|intcomma }}</td>
+                                <td>${{ row.neto|floatformat:2|intcomma }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" style="text-align:center; color:var(--color-text-light);">
+                                No hay suficientes datos históricos para mostrar la tendencia.
+                            </td>
+                        </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- 2) PESTAÑA DETALLE OPERATIVO (NIVEL SUB-EMPRESA) -->
+    <!-- ===================================================== -->
+    <div id="detalle" style="scroll-margin-top: 80px; margin-top: 40px;">
+        <h3 style="margin-bottom: 12px;">Detalle operativo por sub-empresa</h3>
+
+        {% if not tiene_subempresa_detalle %}
+            <div class="card">
+                <p>
+                    Para ver el detalle operativo selecciona una
+                    <strong>sub-empresa</strong> en el menú lateral.
+                </p>
+            </div>
+        {% else %}
+
+            <!-- Filtros de rango de fechas -->
+            <div class="card">
+                <form method="get" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+                    <input type="hidden" name="vista" value="detalle">
+                    <div>
+                        <label for="op_desde">Desde</label>
+                        <input type="date" id="op_desde" name="op_desde"
+                               value="{{ detalle_desde|date:'Y-m-d' }}">
+                    </div>
+                    <div>
+                        <label for="op_hasta">Hasta</label>
+                        <input type="date" id="op_hasta" name="op_hasta"
+                               value="{{ detalle_hasta|date:'Y-m-d' }}">
+                    </div>
+                    <button type="submit" class="btn" style="margin-top: 4px;">
+                        Aplicar rango
+                    </button>
+                </form>
+            </div>
+
+            <!-- Panel de resumen del período -->
+            <div class="metric-grid" style="margin-top: 10px;">
+                <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+                    <h3>Ingresos del período</h3>
+                    <div class="value">
+                        ${{ ingresos_periodo|floatformat:2|intcomma }}
+                    </div>
+                </div>
+                <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+                    <h3>Egresos del período</h3>
+                    <div class="value" style="color: var(--color-danger-red);">
+                        ${{ egresos_periodo|floatformat:2|intcomma }}
+                    </div>
+                </div>
+                <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
+                    <h3>Flujo neto del período</h3>
+                    <div class="value">
+                        ${{ flujo_neto_periodo|floatformat:2|intcomma }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alertas de cuentas pendientes -->
+            <div class="metric-grid" style="margin-top: 20px;">
+                <div class="card">
+                    <h3>Cuentas por cobrar pendientes</h3>
+                    <a href="#cxc_pendientes" style="text-decoration:none;">
+                        <div class="value">
+                            ${{ monto_cxc_pendientes_sub|floatformat:2|intcomma }}
+                        </div>
+                    </a>
+                    <p class="label">
+                        Pagos futuros (activos) aún no cobrados de esta sub-empresa.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Cuentas por pagar pendientes</h3>
+                    <a href="#ctp_pendientes" style="text-decoration:none;">
+                        <div class="value">
+                            ${{ monto_ctp_pendientes_sub|floatformat:2|intcomma }}
+                        </div>
+                    </a>
+                    <p class="label">
+                        Obligaciones (pasivos) futuras aún no pagadas de esta sub-empresa.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Desglose por concepto -->
+            <div class="card" style="margin-top: 25px;">
+                <h3>Movimientos por concepto (período seleccionado)</h3>
+                <p class="label" style="margin-bottom: 8px;">
+                    Permite ver qué conceptos generan o consumen más recursos.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Ingresos</th>
+                            <th>Egresos</th>
+                            <th>Flujo neto</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if conceptos_detalle %}
+                            {% for row in conceptos_detalle %}
+                                <tr>
+                                    <td>{{ row.concepto }}</td>
+                                    <td>${{ row.activos|floatformat:2|intcomma }}</td>
+                                    <td>${{ row.pasivos|floatformat:2|intcomma }}</td>
+                                    <td>${{ row.neto|floatformat:2|intcomma }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" style="text-align:center; color:var(--color-text-light);">
+                                    No hay movimientos en el período seleccionado.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Cuentas por cobrar pendientes -->
+            <div class="card" id="cxc_pendientes" style="margin-top: 25px;">
+                <h3>Cuentas por cobrar pendientes</h3>
+                <p class="label" style="margin-bottom: 8px;">
+                    Lista de pagos de activos aún no cobrados; desde aquí puedes ir al movimiento para registrar el cobro.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha venc.</th>
+                            <th>Movimiento</th>
+                            <th>Sub-empresa</th>
+                            <th>Monto</th>
+                            <th>Tipo</th>
+                            <th>Ver movimiento</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if cxc_pendientes_lista %}
+                            {% for p in cxc_pendientes_lista %}
+                                <tr>
+                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>{{ p.movimiento.concepto.nombre }}</td>
+                                    <td>
+                                        {% if p.movimiento.subempresa %}
+                                            {{ p.movimiento.subempresa.nombre }}
+                                        {% else %}
+                                            –
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
+                                    <td>{{ p.movimiento.get_tipo_display }}</td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}"
+                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                            Ver / cobrar
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" style="text-align:center; color:var(--color-text-light);">
+                                    No hay cuentas por cobrar pendientes.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Cuentas por pagar pendientes -->
+            <div class="card" id="ctp_pendientes" style="margin-top: 25px;">
+                <h3>Cuentas por pagar pendientes</h3>
+                <p class="label" style="margin-bottom: 8px;">
+                    Obligaciones futuras de esta sub-empresa; desde aquí puedes ir al movimiento para registrar el pago.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha venc.</th>
+                            <th>Movimiento</th>
+                            <th>Sub-empresa</th>
+                            <th>Monto</th>
+                            <th>Tipo</th>
+                            <th>Ver movimiento</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if ctp_pendientes_lista %}
+                            {% for p in ctp_pendientes_lista %}
+                                <tr>
+                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>{{ p.movimiento.concepto.nombre }}</td>
+                                    <td>
+                                        {% if p.movimiento.subempresa %}
+                                            {{ p.movimiento.subempresa.nombre }}
+                                        {% else %}
+                                            –
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
+                                    <td>{{ p.movimiento.get_tipo_display }}</td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}"
+                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                            Ver / pagar
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" style="text-align:center; color:var(--color-text-light);">
+                                    No hay cuentas por pagar pendientes.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Lista de pagos vencidos -->
+            <div class="card" style="margin-top: 25px;">
+                <h3>Pagos vencidos</h3>
+                <p class="label" style="margin-bottom: 8px;">
+                    Pagos cuyo vencimiento ya pasó y siguen pendientes; son prioridad de atención.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha venc.</th>
+                            <th>Movimiento</th>
+                            <th>Tipo (A/P)</th>
+                            <th>Sub-empresa</th>
+                            <th>Monto</th>
+                            <th>Ver movimiento</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if pagos_vencidos_sub %}
+                            {% for p in pagos_vencidos_sub %}
+                                <tr>
+                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>{{ p.movimiento.concepto.nombre }}</td>
+                                    <td>{{ p.movimiento.get_tipo_display }}</td>
+                                    <td>
+                                        {% if p.movimiento.subempresa %}
+                                            {{ p.movimiento.subempresa.nombre }}
+                                        {% else %}
+                                            –
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}"
+                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                            Ver / actualizar
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" style="text-align:center; color:var(--color-text-light);">
+                                    No hay pagos vencidos para esta sub-empresa.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Proyección mensual de flujo -->
+            <div class="card" style="margin-top: 25px;">
+                <h3>Proyección mensual de flujo (próximos 6 meses)</h3>
+                <p class="label" style="margin-bottom: 8px;">
+                    Basada en los pagos programados (ingresos y egresos) no pagados.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Mes</th>
+                            <th>Ingresos esperados</th>
+                            <th>Egresos esperados</th>
+                            <th>Flujo neto esperado</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if proyeccion_mensual %}
+                            {% for row in proyeccion_mensual %}
+                                <tr>
+                                    <td>{{ row.mes|stringformat:"02d" }}/{{ row.anio }}</td>
+                                    <td>${{ row.ingresos|floatformat:2|intcomma }}</td>
+                                    <td>${{ row.egresos|floatformat:2|intcomma }}</td>
+                                    <td>${{ row.neto|floatformat:2|intcomma }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" style="text-align:center; color:var(--color-text-light);">
+                                    No hay pagos futuros suficientes para proyectar el flujo.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Movimientos detallados de la sub-empresa -->
+            <div class="card" style="margin-top: 30px;">
+                <h3>Movimientos detallados de la sub-empresa</h3>
+                <p style="color: var(--color-text-light); margin-bottom: 8px;">
+                    Cada fila representa un movimiento del período, con su avance de pagos.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha registro</th>
+                            <th>Fecha inicio</th>
+                            <th>Folio</th>
+                            <th>Tipo</th>
+                            <th>Concepto</th>
+                            <th>Estado (workflow)</th>
+                            <th>Estatus pagos</th>
+                            <th>Monto total</th>
+                            <th>Monto pagado</th>
+                            <th>Monto pendiente</th>
+                            <th>Frecuencia / # pagos</th>
+                            <th>Capturado por</th>
+                            <th>Detalle</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if movimientos_detalle %}
+                            {% for mov in movimientos_detalle %}
+                                <tr>
+                                    <td>{{ mov.fecha_registro|date:"d/m/Y" }}</td>
+                                    <td>{{ mov.fecha_inicio|date:"d/m/Y" }}</td>
+                                    <td>{{ mov.folio|default:"—" }}</td>
+                                    <td>{{ mov.get_tipo_display }}</td>
+                                    <td>{{ mov.concepto.nombre }}</td>
+                                    <td>{{ mov.get_estado_display }}</td>
+                                    <td>
+                                        <span class="estatus-label {{ mov.estatus_css }}">
+                                            {{ mov.estatus_label }}
+                                        </span>
+                                    </td>
+                                    <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
+                                    <td>${{ mov.total_pagado|floatformat:2|intcomma }}</td>
+                                    <td>${{ mov.total_pendiente|floatformat:2|intcomma }}</td>
+                                    <td>{{ mov.get_frecuencia_pago_display }} / {{ mov.numero_pagos }}</td>
+                                    <td>
+                                        {% if mov.usuario_captura %}
+                                            {{ mov.usuario_captura.get_username }}
+                                        {% else %}
+                                            –
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' mov.id %}"
+                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                            Ver detalle
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="13" style="text-align:center; color:var(--color-text-light);">
+                                    No hay movimientos en el período seleccionado.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        {% endif %}
     </div>
 
 {% endif %}

@@ -4,11 +4,17 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from .models import Empresa, Subempresa, UsuarioEmpresa, Movimiento, Pago, ConceptoMovimiento
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from django.contrib.admin.views.decorators import staff_member_required
 from .forms import MovimientoForm, PagoForm
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+from django.db.models.functions import TruncMonth
+from django.http import HttpResponse
+import csv
+from io import BytesIO
+
+
 
 def _generar_pagos_iniciales(mov: Movimiento):
     """
@@ -238,45 +244,313 @@ def logout_view(request):
 
 @login_required(login_url="core:login")
 def dashboard_view(request):
+    """
+    Panel general con:
+    - Filtros globales (rango, estado de pago, concepto)
+    - Dashboard operativo (sub-empresa): flujo de caja proyectado + CxC
+    - Dashboard estratégico (empresa): rentabilidad por sub-empresa + desglose por conceptos
+    """
     ctx = _contexto_usuario(request)
-
     empresa = ctx["empresa_actual"]
     subempresa = ctx["subempresa_actual"]
+    hoy = date.today()
 
+    # -----------------------------
+    # 1) Filtros globales ("Control Center")
+    # -----------------------------
+    # Rango: mes_actual / ultimos_30 / personalizado
+    rango = request.GET.get("rango", "mes_actual")
+    fecha_desde = None
+    fecha_hasta = None
+
+    if rango == "ultimos_30":
+        fecha_hasta = hoy
+        fecha_desde = hoy - timedelta(days=30)
+    elif rango == "personalizado":
+        desde_str = request.GET.get("desde")
+        hasta_str = request.GET.get("hasta")
+        try:
+            if desde_str:
+                fecha_desde = date.fromisoformat(desde_str)
+        except ValueError:
+            fecha_desde = None
+        try:
+            if hasta_str:
+                fecha_hasta = date.fromisoformat(hasta_str)
+        except ValueError:
+            fecha_hasta = None
+        # Defaults si algo viene mal
+        if not fecha_hasta:
+            fecha_hasta = hoy
+        if not fecha_desde:
+            fecha_desde = fecha_hasta - timedelta(days=30)
+    else:
+        # mes_actual (default)
+        rango = "mes_actual"
+        fecha_hasta = hoy
+        fecha_desde = date(hoy.year, hoy.month, 1)
+
+    # Estado de pago: todos / pagados / pendientes / vencidos
+    estado_pago = request.GET.get("estado_pago", "todos")
+    if estado_pago not in ("todos", "pagados", "pendientes", "vencidos"):
+        estado_pago = "todos"
+
+    # Filtro de concepto (por id)
+    concepto_id = request.GET.get("concepto") or ""
+    if not concepto_id.isdigit():
+        concepto_id = ""
+
+    # Lista de conceptos disponibles para el dropdown (solo los que tienen movimientos en la empresa)
+    if empresa:
+        conceptos_disponibles = (
+            ConceptoMovimiento.objects
+            .filter(movimientos__empresa=empresa)
+            .distinct()
+            .order_by("nombre")
+        )
+    else:
+        conceptos_disponibles = ConceptoMovimiento.objects.none()
+
+    # Si no hay empresa seleccionada, devolvemos contexto "vacío" pero con filtros y dropdown
     if empresa is None:
-        ctx["total_sub_empresas_activas"] = 0
-        ctx["total_activos"] = 0
-        ctx["total_pasivos"] = 0
-        ctx["balance_total"] = 0
-        ctx["movimientos"] = Movimiento.objects.none()
+        ctx.update({
+            "total_subempresas_activas": 0,
+            "balance_total": Decimal("0"),
+            "flujo_caja_pagos": [],
+            "cxc_pagos": [],
+            "reporte_subempresas": [],
+            "desglose_conceptos": [],
+            "total_conceptos_monto": Decimal("0"),
+            "filtro_rango": rango,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "filtro_estado_pago": estado_pago,
+            "filtro_concepto_id": concepto_id,
+            "conceptos_disponibles": conceptos_disponibles,
+            "hoy": hoy,
+        })
         return render(request, "core/dashboard.html", ctx)
-    
+
+    # -----------------------------
+    # 2) Métricas históricas básicas (empresa)
+    #    (NO dependen de los filtros, para el "Balance total" general)
+    # -----------------------------
+    qs_movs_total = Movimiento.objects.filter(empresa=empresa)
+    total_activos_total = (
+        qs_movs_total
+        .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    total_pasivos_total = (
+        qs_movs_total
+        .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    capital_inicial = empresa.capital_inicial or Decimal("0")
+    balance_total = capital_inicial + total_activos_total - total_pasivos_total
     total_subs_activas = empresa.subempresas.filter(esta_activa=True).count()
 
-    qs_movs = Movimiento.objects.filter(empresa=empresa)
+    # -----------------------------
+    # 3) Query base para filtros (devengado y flujo)
+    # -----------------------------
 
-    total_activos = qs_movs.filter(
-        tipo=Movimiento.TipoMovimiento.ACTIVO
-    ).aggregate(total=Sum('monto_total'))['total'] or 0
+    # DEVENGADO (Movimiento) filtrado por rango y concepto
+    qs_movs_rango = Movimiento.objects.filter(
+        empresa=empresa,
+        fecha_registro__gte=fecha_desde,
+        fecha_registro__lte=fecha_hasta,
+    )
+    if concepto_id:
+        qs_movs_rango = qs_movs_rango.filter(concepto_id=int(concepto_id))
 
-    total_pasivos = qs_movs.filter(
-        tipo=Movimiento.TipoMovimiento.PASIVO
-    ).aggregate(total=Sum('monto_total'))['total'] or 0
+    # FLUJO (Pago) filtrado globalmente por empresa, rango y concepto
+    qs_pagos_base = Pago.objects.filter(
+        movimiento__empresa=empresa,
+        fecha_vencimiento__gte=fecha_desde,
+        fecha_vencimiento__lte=fecha_hasta,
+    )
+    if concepto_id:
+        qs_pagos_base = qs_pagos_base.filter(movimiento__concepto_id=int(concepto_id))
 
-    capital_inicial = empresa.capital_inicial or 0
-    balance_total = capital_inicial + total_activos - total_pasivos
+    # -----------------------------
+    # 4) Nivel Sub-empresa (Operativo)
+    # -----------------------------
+    flujo_caja_pagos = []
+    cxc_pagos = []
 
-    movimientos = qs_movs.order_by("-fecha_registro", "-id")[:20]
+    if subempresa:
+        # a) Flujo de caja proyectado: pagos de la sub-empresa en el rango
+        pagos_sub = qs_pagos_base.filter(movimiento__subempresa=subempresa)
 
+        # Filtro por estado de pago (solo para esta tabla)
+        if estado_pago == "pagados":
+            pagos_sub = pagos_sub.filter(esta_pagado=True)
+        elif estado_pago == "pendientes":
+            pagos_sub = pagos_sub.filter(
+                esta_pagado=False,
+                fecha_vencimiento__gte=hoy,
+            )
+        elif estado_pago == "vencidos":
+            pagos_sub = pagos_sub.filter(
+                esta_pagado=False,
+                fecha_vencimiento__lt=hoy,
+            )
+
+        pagos_sub = pagos_sub.select_related(
+            "movimiento",
+            "movimiento__concepto",
+            "movimiento__subempresa",
+        ).order_by("fecha_vencimiento", "numero_pago")
+
+        # Enriquecer con etiquetas de estado para la UI
+        flujo_caja_pagos = list(pagos_sub)
+        for p in flujo_caja_pagos:
+            if p.esta_pagado:
+                p.estado_label = "Pagado"
+                p.estado_color = "#16A34A"  # verde
+            else:
+                if p.fecha_vencimiento < hoy:
+                    p.estado_label = "Vencido"
+                    p.estado_color = "#DC2626"  # rojo
+                else:
+                    p.estado_label = "Pendiente"
+                    p.estado_color = "#6B7280"  # gris
+
+        # b) Cuentas por cobrar (cartera vencida/pendiente) solo de ACTIVOS pendientes
+        cxc_qs = qs_pagos_base.filter(
+            movimiento__subempresa=subempresa,
+            movimiento__tipo=Movimiento.TipoMovimiento.ACTIVO,
+            esta_pagado=False,
+        ).select_related("movimiento", "movimiento__concepto")
+
+        cxc_pagos = list(cxc_qs)
+        for p in cxc_pagos:
+            # Días de retraso: negativo = por vencer
+            p.dias_retraso = (hoy - p.fecha_vencimiento).days
+            # Valor absoluto para mostrar "Por vencer (X días)" sin usar filtro abs en template
+            p.dias_retraso_abs = abs(p.dias_retraso)
+
+    # -----------------------------
+    # 5) Nivel Empresa (Estratégico)
+    # -----------------------------
+
+    # a) Rentabilidad por sub-empresa (ingresos cobrados / egresos pagados / deuda pendiente)
+    # Sub-empresas permitidas para el usuario
+    subs_permitidas = getattr(empresa, "subs_permitidas", None)
+    if subs_permitidas is not None:
+        base_sub_qs = Subempresa.objects.filter(
+            empresa=empresa,
+            id__in=[s.id for s in subs_permitidas],
+            esta_activa=True,
+        )
+    else:
+        base_sub_qs = empresa.subempresas.filter(esta_activa=True)
+
+    filtro_ingresos = Q(
+        movimientos__pagos__esta_pagado=True,
+        movimientos__tipo=Movimiento.TipoMovimiento.ACTIVO,
+        movimientos__pagos__fecha_pago__gte=fecha_desde,
+        movimientos__pagos__fecha_pago__lte=fecha_hasta,
+    )
+    filtro_egresos = Q(
+        movimientos__pagos__esta_pagado=True,
+        movimientos__tipo=Movimiento.TipoMovimiento.PASIVO,
+        movimientos__pagos__fecha_pago__gte=fecha_desde,
+        movimientos__pagos__fecha_pago__lte=fecha_hasta,
+    )
+    filtro_deuda = Q(
+        movimientos__pagos__esta_pagado=False,
+        movimientos__tipo=Movimiento.TipoMovimiento.PASIVO,
+        movimientos__pagos__fecha_vencimiento__gte=fecha_desde,
+        movimientos__pagos__fecha_vencimiento__lte=fecha_hasta,
+    )
+    if concepto_id:
+        filtro_ingresos &= Q(movimientos__concepto_id=int(concepto_id))
+        filtro_egresos &= Q(movimientos__concepto_id=int(concepto_id))
+        filtro_deuda &= Q(movimientos__concepto_id=int(concepto_id))
+
+    reporte_qs = base_sub_qs.annotate(
+        ingresos_cobrados=Sum("movimientos__pagos__monto", filter=filtro_ingresos),
+        egresos_pagados=Sum("movimientos__pagos__monto", filter=filtro_egresos),
+        deuda_pendiente=Sum("movimientos__pagos__monto", filter=filtro_deuda),
+    )
+
+    reporte_subempresas = []
+    for sub in reporte_qs:
+        ing = sub.ingresos_cobrados or Decimal("0")
+        egr = sub.egresos_pagados or Decimal("0")
+        deuda = sub.deuda_pendiente or Decimal("0")
+        neto = ing - egr
+        if neto > 0:
+            salud_label = "Sana"
+            salud_color = "#16A34A"
+        elif neto < 0:
+            salud_label = "En riesgo"
+            salud_color = "#DC2626"
+        else:
+            salud_label = "Neutra"
+            salud_color = "#6B7280"
+        reporte_subempresas.append({
+            "subempresa": sub,
+            "ingresos_cobrados": ing,
+            "egresos_pagados": egr,
+            "flujo_neto_real": neto,
+            "deuda_pendiente": deuda,
+            "salud_label": salud_label,
+            "salud_color": salud_color,
+        })
+
+    # b) Desglose por conceptos (devengado, a nivel corporativo)
+    conceptos_qs = (
+        qs_movs_rango
+        .values("concepto__nombre")
+        .annotate(
+            total_movimientos=Count("id"),
+            monto_total=Sum("monto_total"),
+        )
+        .order_by("-monto_total")
+    )
+
+    total_conceptos_monto = Decimal("0")
+    for row in conceptos_qs:
+        total_conceptos_monto += row["monto_total"] or Decimal("0")
+
+    desglose_conceptos = []
+    for row in conceptos_qs:
+        monto = row["monto_total"] or Decimal("0")
+        if total_conceptos_monto > 0:
+            pct = (monto / total_conceptos_monto) * Decimal("100")
+        else:
+            pct = Decimal("0")
+        desglose_conceptos.append({
+            "concepto": row["concepto__nombre"],
+            "total_movimientos": row["total_movimientos"],
+            "monto_total": monto,
+            "porcentaje": pct,
+        })
+
+    # -----------------------------
+    # 6) Actualizar contexto y render
+    # -----------------------------
     ctx.update({
         "total_subempresas_activas": total_subs_activas,
-        "total_activos": total_activos,
-        "total_pasivos": total_pasivos,
         "balance_total": balance_total,
-        "movimientos": movimientos,
-        "total_reportes_aprobados": 0,
-        "total_pendientes_revision": 0,
-        "aprobaciones_pendientes": [],
+        # Filtros
+        "filtro_rango": rango,
+        "fecha_desde": fecha_desde,
+        "fecha_hasta": fecha_hasta,
+        "filtro_estado_pago": estado_pago,
+        "filtro_concepto_id": concepto_id,
+        "conceptos_disponibles": conceptos_disponibles,
+        # Nivel sub-empresa
+        "flujo_caja_pagos": flujo_caja_pagos,
+        "cxc_pagos": cxc_pagos,
+        # Nivel empresa
+        "reporte_subempresas": reporte_subempresas,
+        "desglose_conceptos": desglose_conceptos,
+        "total_conceptos_monto": total_conceptos_monto,
+        # Utilidades para la plantilla
+        "hoy": hoy,
     })
 
     return render(request, "core/dashboard.html", ctx)
@@ -738,67 +1012,119 @@ def pago_editar_view(request, movimiento_id: int, pk: int):
 @login_required(login_url="core:login")
 def balance_view(request):
     ctx = _contexto_usuario(request)
-
     empresa = ctx["empresa_actual"]
     subempresa = ctx["subempresa_actual"]
 
+    hoy = date.today()
+
+    # Selector simple para resaltar pestaña en la UI (no oculta secciones)
+    vista_activa = request.GET.get("vista", "consolidado")
+
+    # Si no hay empresa seleccionada, devolvemos contexto vacío seguro
     if empresa is None:
         ctx.update({
-            "total_activos": 0,
-            "total_pasivos": 0,
-            "total_capital": 0,
+            # Consolidado
+            "saldo_neto_consolidado": Decimal("0"),
+            "ingresos_ytd": Decimal("0"),
+            "egresos_ytd": Decimal("0"),
+            "flujo_neto_ytd": Decimal("0"),
+            "total_activos": Decimal("0"),
+            "total_pasivos": Decimal("0"),
+            "total_capital": Decimal("0"),
             "balance_detallado": [],
             "ratio_ap_total": None,
+            "resumen_tipo_estado": {},
+            "cuentas_cobrar_vencidas": Decimal("0"),
+            "cuentas_cobrar_vigentes": Decimal("0"),
+            "deuda_vencida": Decimal("0"),
+            "deuda_vigente": Decimal("0"),
+            "pagos_vencidos_consolidados": 0,
+            "monto_pagos_vencidos_consolidados": Decimal("0"),
+            "flujo_12m": [],
+
+            # Detalle operativo sub-empresa
+            "tiene_subempresa_detalle": False,
+            "detalle_desde": None,
+            "detalle_hasta": None,
+            "ingresos_periodo": Decimal("0"),
+            "egresos_periodo": Decimal("0"),
+            "flujo_neto_periodo": Decimal("0"),
+            "conceptos_detalle": [],
+            "monto_cxc_pendientes_sub": Decimal("0"),
+            "monto_ctp_pendientes_sub": Decimal("0"),
+            "cxc_pendientes_lista": [],
+            "ctp_pendientes_lista": [],
+            "pagos_vencidos_sub": [],
+            "proyeccion_mensual": [],
             "movimientos_detalle": [],
+            "vista_activa": vista_activa,
         })
         return render(request, "core/balance.html", ctx)
 
-    # Query base: todos los movimientos de la empresa actual
-    qs_movs = (
+    # -------------------------------------------------------------
+    # 1) NIVEL EMPRESA (CONSOLIDADO)
+    # -------------------------------------------------------------
+    qs_movs_empresa = (
         Movimiento.objects
         .filter(empresa=empresa)
         .select_related("subempresa", "concepto", "usuario_captura")
-        .order_by("-fecha_registro", "-id")
     )
 
-    # Si hay sub-empresa seleccionada, filtramos a esa
-    if subempresa:
-        qs_movs = qs_movs.filter(subempresa=subempresa)
-
-    # Totales globales para tarjetas superiores
+    # Totales globales acumulados (todos los años)
     total_activos = (
-        qs_movs.filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
-        .aggregate(total=Sum("monto_total"))["total"] or 0
+        qs_movs_empresa
+        .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
     )
     total_pasivos = (
-        qs_movs.filter(tipo=Movimiento.TipoMovimiento.PASIVO)
-        .aggregate(total=Sum("monto_total"))["total"] or 0
+        qs_movs_empresa
+        .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
     )
+    capital_inicial = empresa.capital_inicial or Decimal("0")
+    total_capital = capital_inicial + total_activos - total_pasivos
+    saldo_neto_consolidado = total_capital  # interpretación: patrimonio actual
 
-    if subempresa:
-        # Capital solo de esa sub-empresa
-        total_capital = total_activos - total_pasivos
-        subempresas = empresa.subempresas.filter(id=subempresa.id, esta_activa=True)
+    # Year-to-date (YTD) para métricas rápidas
+    inicio_ytd = date(hoy.year, 1, 1)
+    qs_ytd = qs_movs_empresa.filter(
+        fecha_registro__gte=inicio_ytd,
+        fecha_registro__lte=hoy,
+    )
+    ingresos_ytd = (
+        qs_ytd
+        .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    egresos_ytd = (
+        qs_ytd
+        .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    flujo_neto_ytd = ingresos_ytd - egresos_ytd
+
+    # Balance detallado por sub-empresa
+    # Usa las subempresas permitidas en el contexto si existen,
+    # o todas las activas de la empresa en caso contrario.
+    subs_permitidas = getattr(empresa, "subs_permitidas", None)
+    if subs_permitidas is not None:
+        subempresas = subs_permitidas
     else:
-        # Capital consolidado empresa: capital inicial + A - P
-        capital_inicial = empresa.capital_inicial or 0
-        total_capital = capital_inicial + total_activos - total_pasivos
         subempresas = empresa.subempresas.filter(esta_activa=True)
 
-    # Balance detallado por sub-empresa (tabla similar a tu HTML original)
     balance_detallado = []
     for sub in subempresas:
-        qs_sub = qs_movs.filter(subempresa=sub)
-
+        qs_sub = qs_movs_empresa.filter(subempresa=sub)
         act_sub = (
-            qs_sub.filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
-            .aggregate(total=Sum("monto_total"))["total"] or 0
+            qs_sub
+            .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
         )
         pas_sub = (
-            qs_sub.filter(tipo=Movimiento.TipoMovimiento.PASIVO)
-            .aggregate(total=Sum("monto_total"))["total"] or 0
+            qs_sub
+            .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
         )
-
         cap_sub = act_sub - pas_sub
         ratio_ap = (act_sub / pas_sub) if pas_sub else None
 
@@ -812,16 +1138,676 @@ def balance_view(request):
 
     ratio_ap_total = (total_activos / total_pasivos) if total_pasivos else None
 
+    # Resumen por tipo y estado (Pendiente / Aprobado / Cancelado)
+    resumen_tipo_estado = {}
+    for tipo_value, tipo_label in Movimiento.TipoMovimiento.choices:
+        movs_tipo = qs_movs_empresa.filter(tipo=tipo_value)
+        resumen_tipo_estado[tipo_label] = {}
+        total_tipo = Decimal("0")
+
+        for estado_value, estado_label in Movimiento.Estado.choices:
+            monto_estado = (
+                movs_tipo
+                .filter(estado=estado_value)
+                .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+            )
+            resumen_tipo_estado[tipo_label][estado_label] = monto_estado
+            total_tipo += monto_estado
+
+        resumen_tipo_estado[tipo_label]["Total"] = total_tipo
+
+    # KPIs de vencimientos consolidados (todas las sub-empresas)
+    pagos_qs = Pago.objects.filter(movimiento__in=qs_movs_empresa)
+
+    cuentas_cobrar_vencidas = (
+        pagos_qs.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.ACTIVO,
+            esta_pagado=False,
+            fecha_vencimiento__lt=hoy,
+        )
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+    cuentas_cobrar_vigentes = (
+        pagos_qs.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.ACTIVO,
+            esta_pagado=False,
+            fecha_vencimiento__gte=hoy,
+        )
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+    deuda_vencida = (
+        pagos_qs.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.PASIVO,
+            esta_pagado=False,
+            fecha_vencimiento__lt=hoy,
+        )
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+    deuda_vigente = (
+        pagos_qs.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.PASIVO,
+            esta_pagado=False,
+            fecha_vencimiento__gte=hoy,
+        )
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+
+    pagos_vencidos_consolidados_qs = pagos_qs.filter(
+        esta_pagado=False,
+        fecha_vencimiento__lt=hoy,
+    )
+    pagos_vencidos_consolidados = pagos_vencidos_consolidados_qs.count()
+    monto_pagos_vencidos_consolidados = (
+        pagos_vencidos_consolidados_qs
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+
+    # Tendencia: flujo neto últimos ~12 meses (agrupado por año-mes en Python)
+    hace_12m = hoy - timedelta(days=365)
+    movs_12m = qs_movs_empresa.filter(fecha_registro__gte=hace_12m)
+
+    flujo_12m_dict = {}
+    for mov in movs_12m:
+        clave = (mov.fecha_registro.year, mov.fecha_registro.month)
+        if clave not in flujo_12m_dict:
+            flujo_12m_dict[clave] = {
+                "anio": mov.fecha_registro.year,
+                "mes": mov.fecha_registro.month,
+                "ingresos": Decimal("0"),
+                "egresos": Decimal("0"),
+            }
+        entry = flujo_12m_dict[clave]
+        if mov.tipo == Movimiento.TipoMovimiento.ACTIVO:
+            entry["ingresos"] += mov.monto_total or Decimal("0")
+        else:
+            entry["egresos"] += mov.monto_total or Decimal("0")
+
+    flujo_12m = []
+    for (anio, mes), data in sorted(flujo_12m_dict.items(), key=lambda x: (x[0][0], x[0][1])):
+        ingresos = data["ingresos"]
+        egresos = data["egresos"]
+        flujo_12m.append({
+            "anio": anio,
+            "mes": mes,
+            "ingresos": ingresos,
+            "egresos": egresos,
+            "neto": ingresos - egresos,
+        })
+
+    # -------------------------------------------------------------
+    # 2) NIVEL SUB-EMPRESA (DETALLE OPERATIVO)
+    # -------------------------------------------------------------
+    tiene_subempresa_detalle = subempresa is not None
+
+    # Valores por defecto del rango operativo: mes actual
+    if tiene_subempresa_detalle:
+        op_desde_str = request.GET.get("op_desde")
+        op_hasta_str = request.GET.get("op_hasta")
+
+        detalle_desde = None
+        detalle_hasta = None
+
+        if op_desde_str:
+            try:
+                detalle_desde = date.fromisoformat(op_desde_str)
+            except ValueError:
+                detalle_desde = None
+        if op_hasta_str:
+            try:
+                detalle_hasta = date.fromisoformat(op_hasta_str)
+            except ValueError:
+                detalle_hasta = None
+
+        if not detalle_hasta:
+            detalle_hasta = hoy
+        if not detalle_desde:
+            detalle_desde = date(hoy.year, hoy.month, 1)
+
+        # Query base del detalle: solo esa sub-empresa y rango de fechas
+        # IMPORTANTE: se filtra por fecha_inicio (periodo operativo)
+        qs_movs_detalle = (
+            qs_movs_empresa
+            .filter(
+                subempresa=subempresa,
+                fecha_inicio__gte=detalle_desde,
+                fecha_inicio__lte=detalle_hasta,
+            )
+            .prefetch_related("pagos")
+        )
+
+        ingresos_periodo = (
+            qs_movs_detalle
+            .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        egresos_periodo = (
+            qs_movs_detalle
+            .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        flujo_neto_periodo = ingresos_periodo - egresos_periodo
+
+        # Desglose por concepto (ingresos/egresos y neto)
+        conceptos_qs = (
+            qs_movs_detalle
+            .values("concepto__nombre")
+            .annotate(
+                total_activos=Sum(
+                    "monto_total",
+                    filter=Q(tipo=Movimiento.TipoMovimiento.ACTIVO),
+                ),
+                total_pasivos=Sum(
+                    "monto_total",
+                    filter=Q(tipo=Movimiento.TipoMovimiento.PASIVO),
+                ),
+            )
+        )
+        conceptos_detalle = []
+        for row in conceptos_qs:
+            act = row["total_activos"] or Decimal("0")
+            pas = row["total_pasivos"] or Decimal("0")
+            conceptos_detalle.append({
+                "concepto": row["concepto__nombre"],
+                "activos": act,
+                "pasivos": pas,
+                "neto": act - pas,
+            })
+        # Ordenar por impacto neto (mayor absoluto primero)
+        conceptos_detalle.sort(key=lambda r: abs(r["neto"]), reverse=True)
+
+        # Pagos asociados a la sub-empresa (para CxC, CxP y proyección)
+        # Nota: estas tarjetas muestran TODO lo pendiente de la sub-empresa,
+        # no solo el rango, para no ocultar obligaciones importantes.
+        pagos_sub = Pago.objects.filter(movimiento__empresa=empresa, movimiento__subempresa=subempresa)
+
+        pagos_pendientes = pagos_sub.filter(esta_pagado=False)
+
+        cxc_pendientes_qs = pagos_pendientes.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.ACTIVO
+        )
+        ctp_pendientes_qs = pagos_pendientes.filter(
+            movimiento__tipo=Movimiento.TipoMovimiento.PASIVO
+        )
+
+        monto_cxc_pendientes_sub = (
+            cxc_pendientes_qs.aggregate(total=Sum("monto"))["total"] or Decimal("0")
+        )
+        monto_ctp_pendientes_sub = (
+            ctp_pendientes_qs.aggregate(total=Sum("monto"))["total"] or Decimal("0")
+        )
+
+        # Listas para acción directa (limitadas para no explotar la tabla)
+        cxc_pendientes_lista = (
+            cxc_pendientes_qs
+            .select_related("movimiento", "movimiento__subempresa")
+            .order_by("fecha_vencimiento", "movimiento__id")[:100]
+        )
+        ctp_pendientes_lista = (
+            ctp_pendientes_qs
+            .select_related("movimiento", "movimiento__subempresa")
+            .order_by("fecha_vencimiento", "movimiento__id")[:100]
+        )
+
+        pagos_vencidos_sub = (
+            pagos_pendientes
+            .filter(fecha_vencimiento__lt=hoy)
+            .select_related("movimiento", "movimiento__subempresa")
+            .order_by("fecha_vencimiento", "movimiento__id")[:100]
+        )
+
+        # Proyección mensual de flujo (próximos ~6 meses)
+        horizonte = hoy + timedelta(days=180)
+        pagos_futuros = pagos_pendientes.filter(
+            fecha_vencimiento__gte=hoy,
+            fecha_vencimiento__lte=horizonte,
+        ).select_related("movimiento")
+
+        proy_dict = {}
+        for p in pagos_futuros:
+            clave = (p.fecha_vencimiento.year, p.fecha_vencimiento.month)
+            if clave not in proy_dict:
+                proy_dict[clave] = {
+                    "anio": p.fecha_vencimiento.year,
+                    "mes": p.fecha_vencimiento.month,
+                    "ingresos": Decimal("0"),
+                    "egresos": Decimal("0"),
+                }
+            entry = proy_dict[clave]
+            if p.movimiento.tipo == Movimiento.TipoMovimiento.ACTIVO:
+                entry["ingresos"] += p.monto or Decimal("0")
+            else:
+                entry["egresos"] += p.monto or Decimal("0")
+
+        proyeccion_mensual = []
+        for (anio, mes), data in sorted(proy_dict.items(), key=lambda x: (x[0][0], x[0][1])):
+            ingresos = data["ingresos"]
+            egresos = data["egresos"]
+            proyeccion_mensual.append({
+                "anio": anio,
+                "mes": mes,
+                "ingresos": ingresos,
+                "egresos": egresos,
+                "neto": ingresos - egresos,
+            })
+
+        # Movimientos detallados de la sub-empresa (para tabla de la parte baja)
+        qs_movs_detalle = (
+            qs_movs_detalle
+            .annotate(
+                total_pagado=Sum(
+                    "pagos__monto",
+                    filter=Q(pagos__esta_pagado=True),
+                )
+            )
+            .order_by("-fecha_inicio", "-id")
+        )
+
+        for mov in qs_movs_detalle:
+            label, css = _calcular_estatus_mov(mov, hoy)
+            mov.estatus_label = label
+            mov.estatus_css = css
+            pagado = mov.total_pagado or Decimal("0")
+            mov.total_pagado = pagado
+            mov.total_pendiente = (mov.monto_total or Decimal("0")) - pagado
+
+    else:
+        # Sin sub-empresa seleccionada: se muestra mensaje en la UI
+        detalle_desde = None
+        detalle_hasta = None
+        ingresos_periodo = Decimal("0")
+        egresos_periodo = Decimal("0")
+        flujo_neto_periodo = Decimal("0")
+        conceptos_detalle = []
+        monto_cxc_pendientes_sub = Decimal("0")
+        monto_ctp_pendientes_sub = Decimal("0")
+        cxc_pendientes_lista = []
+        ctp_pendientes_lista = []
+        pagos_vencidos_sub = []
+        proyeccion_mensual = []
+        qs_movs_detalle = []
+
+    # -------------------------------------------------------------
+    # 3) ACTUALIZAR CONTEXTO Y RENDER
+    # -------------------------------------------------------------
     ctx.update({
+        # Vista / pestaña activa
+        "vista_activa": vista_activa,
+
+        # Nivel empresa (consolidado)
+        "saldo_neto_consolidado": saldo_neto_consolidado,
+        "ingresos_ytd": ingresos_ytd,
+        "egresos_ytd": egresos_ytd,
+        "flujo_neto_ytd": flujo_neto_ytd,
         "total_activos": total_activos,
         "total_pasivos": total_pasivos,
         "total_capital": total_capital,
         "balance_detallado": balance_detallado,
         "ratio_ap_total": ratio_ap_total,
-        # queryset completo para la tabla de movimientos explícitos
-        "movimientos_detalle": qs_movs,
+        "resumen_tipo_estado": resumen_tipo_estado,
+        "cuentas_cobrar_vencidas": cuentas_cobrar_vencidas,
+        "cuentas_cobrar_vigentes": cuentas_cobrar_vigentes,
+        "deuda_vencida": deuda_vencida,
+        "deuda_vigente": deuda_vigente,
+        "pagos_vencidos_consolidados": pagos_vencidos_consolidados,
+        "monto_pagos_vencidos_consolidados": monto_pagos_vencidos_consolidados,
+        "flujo_12m": flujo_12m,
+
+        # Nivel sub-empresa (detalle operativo)
+        "tiene_subempresa_detalle": tiene_subempresa_detalle,
+        "detalle_desde": detalle_desde,
+        "detalle_hasta": detalle_hasta,
+        "ingresos_periodo": ingresos_periodo,
+        "egresos_periodo": egresos_periodo,
+        "flujo_neto_periodo": flujo_neto_periodo,
+        "conceptos_detalle": conceptos_detalle,
+        "monto_cxc_pendientes_sub": monto_cxc_pendientes_sub,
+        "monto_ctp_pendientes_sub": monto_ctp_pendientes_sub,
+        "cxc_pendientes_lista": cxc_pendientes_lista,
+        "ctp_pendientes_lista": ctp_pendientes_lista,
+        "pagos_vencidos_sub": pagos_vencidos_sub,
+        "proyeccion_mensual": proyeccion_mensual,
+        "movimientos_detalle": qs_movs_detalle,
     })
+
     return render(request, "core/balance.html", ctx)
+
+@login_required(login_url="core:login")
+def balance_export_view(request):
+    """
+    Exporta el mismo reporte financiero de balance_view
+    en formato CSV, PDF o texto plano.
+    """
+    ctx = _contexto_usuario(request)
+    empresa = ctx["empresa_actual"]
+    subempresa = ctx["subempresa_actual"]
+    hoy = date.today()
+
+    if empresa is None:
+        messages.error(request, "Selecciona una empresa antes de exportar el reporte.")
+        return redirect("core:balance")
+
+    # Formato solicitado
+    formato = request.GET.get("formato", "csv").lower()
+    if formato not in ("csv", "txt", "pdf"):
+        formato = "csv"
+
+    # --------------------------
+    # 1) Datos a nivel empresa
+    # --------------------------
+    qs_movs_empresa = Movimiento.objects.filter(empresa=empresa)
+
+    total_activos = (
+        qs_movs_empresa
+        .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    total_pasivos = (
+        qs_movs_empresa
+        .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    capital_inicial = empresa.capital_inicial or Decimal("0")
+    total_capital = capital_inicial + total_activos - total_pasivos
+    saldo_neto_consolidado = total_capital
+
+    inicio_ytd = date(hoy.year, 1, 1)
+    qs_ytd = qs_movs_empresa.filter(
+        fecha_registro__gte=inicio_ytd,
+        fecha_registro__lte=hoy,
+    )
+    ingresos_ytd = (
+        qs_ytd
+        .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    egresos_ytd = (
+        qs_ytd
+        .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+        .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+    )
+    flujo_neto_ytd = ingresos_ytd - egresos_ytd
+
+    # Rendimiento por sub-empresa (mismas subempresas que se muestran en balance.html)
+    subs_permitidas = getattr(empresa, "subs_permitidas", None)
+    if subs_permitidas is not None:
+        subempresas = subs_permitidas
+    else:
+        subempresas = empresa.subempresas.filter(esta_activa=True)
+
+    filas_subempresas = []
+    for sub in subempresas:
+        qs_sub = qs_movs_empresa.filter(subempresa=sub)
+        act_sub = (
+            qs_sub
+            .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        pas_sub = (
+            qs_sub
+            .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        cap_sub = act_sub - pas_sub
+        filas_subempresas.append((sub.nombre, act_sub, pas_sub, cap_sub))
+
+    # --------------------------
+    # 2) Detalle de sub-empresa (si hay)
+    # --------------------------
+    tiene_sub = subempresa is not None
+    detalle_desde = None
+    detalle_hasta = None
+    ingresos_periodo = Decimal("0")
+    egresos_periodo = Decimal("0")
+    flujo_neto_periodo = Decimal("0")
+    conceptos_detalle = []
+
+    if tiene_sub:
+        # Reutilizamos los mismos parámetros que usa balance_view
+        op_desde_str = request.GET.get("op_desde")
+        op_hasta_str = request.GET.get("op_hasta")
+
+        if op_desde_str:
+            try:
+                detalle_desde = date.fromisoformat(op_desde_str)
+            except ValueError:
+                detalle_desde = None
+        if op_hasta_str:
+            try:
+                detalle_hasta = date.fromisoformat(op_hasta_str)
+            except ValueError:
+                detalle_hasta = None
+
+        if not detalle_hasta:
+            detalle_hasta = hoy
+        if not detalle_desde:
+            detalle_desde = date(hoy.year, hoy.month, 1)
+
+        qs_det = (
+            qs_movs_empresa
+            .filter(
+                subempresa=subempresa,
+                fecha_inicio__gte=detalle_desde,
+                fecha_inicio__lte=detalle_hasta,
+            )
+        )
+
+        ingresos_periodo = (
+            qs_det
+            .filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        egresos_periodo = (
+            qs_det
+            .filter(tipo=Movimiento.TipoMovimiento.PASIVO)
+            .aggregate(total=Sum("monto_total"))["total"] or Decimal("0")
+        )
+        flujo_neto_periodo = ingresos_periodo - egresos_periodo
+
+        conceptos_qs = (
+            qs_det
+            .values("concepto__nombre")
+            .annotate(
+                total_activos=Sum(
+                    "monto_total",
+                    filter=Q(tipo=Movimiento.TipoMovimiento.ACTIVO),
+                ),
+                total_pasivos=Sum(
+                    "monto_total",
+                    filter=Q(tipo=Movimiento.TipoMovimiento.PASIVO),
+                ),
+            )
+        )
+        for row in conceptos_qs:
+            act = row["total_activos"] or Decimal("0")
+            pas = row["total_pasivos"] or Decimal("0")
+            conceptos_detalle.append(
+                (row["concepto__nombre"], act, pas, act - pas)
+            )
+        # Orden por mayor impacto neto
+        conceptos_detalle.sort(key=lambda r: abs(r[3]), reverse=True)
+
+    # --------------------------
+    # 3) Armar respuesta según formato
+    # --------------------------
+
+    # Helper para nombres de archivo
+    base_nombre = f"reporte_financiero_{empresa.nombre.replace(' ', '_')}_{hoy.isoformat()}"
+
+    if formato == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{base_nombre}.csv"'
+        writer = csv.writer(response)
+
+        # Resumen consolidado
+        writer.writerow(["RESUMEN CONSOLIDADO"])
+        writer.writerow(["Empresa", empresa.nombre])
+        writer.writerow(["Fecha de corte", hoy.isoformat()])
+        writer.writerow(["Saldo neto consolidado (hoy)", str(saldo_neto_consolidado)])
+        writer.writerow(["Total ingresos YTD", str(ingresos_ytd)])
+        writer.writerow(["Total egresos YTD", str(egresos_ytd)])
+        writer.writerow(["Flujo neto YTD", str(flujo_neto_ytd)])
+        writer.writerow([])
+        writer.writerow(["Capital inicial", str(capital_inicial)])
+        writer.writerow(["Total activos acumulados", str(total_activos)])
+        writer.writerow(["Total pasivos acumulados", str(total_pasivos)])
+        writer.writerow(["Patrimonio total", str(total_capital)])
+        writer.writerow([])
+
+        # Tabla de sub-empresas
+        writer.writerow(["RENDIMIENTO POR SUB-EMPRESA"])
+        writer.writerow(["Sub-empresa", "Ingresos (activos)", "Egresos (pasivos)", "Flujo neto"])
+        for nombre_sub, act_sub, pas_sub, cap_sub in filas_subempresas:
+            writer.writerow([nombre_sub, str(act_sub), str(pas_sub), str(cap_sub)])
+
+        # Detalle de sub-empresa (si aplica)
+        if tiene_sub:
+            writer.writerow([])
+            writer.writerow([f"DETALLE OPERATIVO - SUB-EMPRESA: {subempresa.nombre}"])
+            writer.writerow(["Rango de fechas", f"{detalle_desde} a {detalle_hasta}"])
+            writer.writerow(["Ingresos período", str(ingresos_periodo)])
+            writer.writerow(["Egresos período", str(egresos_periodo)])
+            writer.writerow(["Flujo neto período", str(flujo_neto_periodo)])
+            writer.writerow([])
+
+            writer.writerow(["Movimientos por concepto (período)"])
+            writer.writerow(["Concepto", "Ingresos", "Egresos", "Flujo neto"])
+            for concepto, act, pas, neto in conceptos_detalle:
+                writer.writerow([concepto, str(act), str(pas), str(neto)])
+
+        return response
+
+    if formato == "txt":
+        lineas = []
+        lineas.append(f"REPORTE FINANCIERO - {empresa.nombre}")
+        lineas.append(f"Fecha de corte: {hoy.isoformat()}")
+        lineas.append("")
+        lineas.append("== Resumen consolidado ==")
+        lineas.append(f"Saldo neto consolidado (hoy): {saldo_neto_consolidado}")
+        lineas.append(f"Total ingresos YTD: {ingresos_ytd}")
+        lineas.append(f"Total egresos YTD: {egresos_ytd}")
+        lineas.append(f"Flujo neto YTD: {flujo_neto_ytd}")
+        lineas.append("")
+        lineas.append(f"Capital inicial: {capital_inicial}")
+        lineas.append(f"Total activos acumulados: {total_activos}")
+        lineas.append(f"Total pasivos acumulados: {total_pasivos}")
+        lineas.append(f"Patrimonio total: {total_capital}")
+        lineas.append("")
+        lineas.append("== Rendimiento por sub-empresa ==")
+        for nombre_sub, act_sub, pas_sub, cap_sub in filas_subempresas:
+            lineas.append(
+                f"- {nombre_sub}: ingresos={act_sub}, egresos={pas_sub}, flujo_neto={cap_sub}"
+            )
+
+        if tiene_sub:
+            lineas.append("")
+            lineas.append(f"== Detalle operativo - Sub-empresa: {subempresa.nombre} ==")
+            lineas.append(f"Rango de fechas: {detalle_desde} a {detalle_hasta}")
+            lineas.append(f"Ingresos del período: {ingresos_periodo}")
+            lineas.append(f"Egresos del período: {egresos_periodo}")
+            lineas.append(f"Flujo neto del período: {flujo_neto_periodo}")
+            lineas.append("")
+            lineas.append("Movimientos por concepto (período):")
+            for concepto, act, pas, neto in conceptos_detalle:
+                lineas.append(
+                    f"- {concepto}: ingresos={act}, egresos={pas}, flujo_neto={neto}"
+                )
+
+        contenido = "\n".join(lineas)
+        response = HttpResponse(contenido, content_type="text/plain; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{base_nombre}.txt"'
+        return response
+
+    # PDF
+    try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+    except ImportError:
+        messages.error(
+            request,
+            "La exportación a PDF requiere instalar la librería reportlab (pip install reportlab).",
+        )
+        return redirect("core:balance")
+
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(50, y, f"Reporte financiero - {empresa.nombre}")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    p.drawString(50, y, f"Fecha de corte: {hoy.isoformat()}")
+    y -= 30
+
+    # Resumen consolidado
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(50, y, "Resumen consolidado")
+    y -= 15
+    p.setFont("Helvetica", 10)
+    p.drawString(50, y, f"Saldo neto consolidado (hoy): {saldo_neto_consolidado}")
+    y -= 12
+    p.drawString(50, y, f"Ingresos YTD: {ingresos_ytd}  |  Egresos YTD: {egresos_ytd}")
+    y -= 12
+    p.drawString(50, y, f"Flujo neto YTD: {flujo_neto_ytd}")
+    y -= 18
+
+    # Sub-empresas
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(50, y, "Rendimiento por sub-empresa")
+    y -= 15
+    p.setFont("Helvetica", 9)
+    for nombre_sub, act_sub, pas_sub, cap_sub in filas_subempresas:
+        texto = (
+            f"{nombre_sub}: ingresos={act_sub}, egresos={pas_sub}, flujo_neto={cap_sub}"
+        )
+        p.drawString(50, y, texto)
+        y -= 12
+        if y < 60:
+            p.showPage()
+            y = height - 50
+            p.setFont("Helvetica", 9)
+
+    # Detalle sub-empresa
+    if tiene_sub:
+        if y < 80:
+            p.showPage()
+            y = height - 50
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(50, y, f"Detalle operativo - {subempresa.nombre}")
+        y -= 15
+        p.setFont("Helvetica", 9)
+        p.drawString(50, y, f"Rango: {detalle_desde} a {detalle_hasta}")
+        y -= 12
+        p.drawString(
+            50,
+            y,
+            f"Ingresos período: {ingresos_periodo}  |  Egresos período: {egresos_periodo}",
+        )
+        y -= 12
+        p.drawString(50, y, f"Flujo neto período: {flujo_neto_periodo}")
+        y -= 16
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, y, "Movimientos por concepto:")
+        y -= 14
+        p.setFont("Helvetica", 9)
+        for concepto, act, pas, neto in conceptos_detalle:
+            texto = f"{concepto}: ingresos={act}, egresos={pas}, flujo_neto={neto}"
+            p.drawString(50, y, texto)
+            y -= 12
+            if y < 60:
+                p.showPage()
+                y = height - 50
+                p.setFont("Helvetica", 9)
+
+    p.showPage()
+    p.save()
+    pdf = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{base_nombre}.pdf"'
+    return response
 
 @login_required(login_url="core:login")
 def movimiento_detalle_view(request, pk: int):
