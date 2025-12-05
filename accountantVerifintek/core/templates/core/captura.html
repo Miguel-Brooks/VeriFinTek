@@ -16,9 +16,10 @@
             {% endif %}
         </p>
     </div>
-    <a href="#registro-movimiento" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Registrar movimiento
+    <a href="#" class="btn btn-primary btn-nuevo-movimiento">
+        + Nuevo movimiento
     </a>
+
 </div>
 {% endblock %}
 
@@ -35,7 +36,7 @@
 {% else %}
 
     <div class="select-grid">
-        <div class="card" style="border-top: 4px solid var(--color-accent-green);">
+        <!-- <div class="card" style="border-top: 4px solid var(--color-accent-green);">
             <h2>Contexto de captura</h2>
             <p style="margin-bottom: 8px;">
                 Empresa: <strong>{{ empresa_actual.nombre }}</strong><br>
@@ -47,22 +48,67 @@
                 {% endif %}
             </p>
 
-        </div>
+        </div> -->
 
-        <div class="card" style="border-top: 4px solid var(--color-danger-red);">
+        <div class="card" style="border-top: 4px solid var(--color-primary-blue);">
             <h3>Resumen rápido</h3>
-            <p style="margin-bottom: 4px;">Activos capturados:</p>
-            <div class="value">
-                ${{ total_activos|floatformat:2|intcomma }}
-            </div>
-            <p style="margin-top: 10px; margin-bottom: 4px;">Pasivos capturados:</p>
-            <div class="value" style="color: var(--color-danger-red);">
-                ${{ total_pasivos|floatformat:2|intcomma }}
-            </div>
+            {% if empresa_actual and puede_capturar %}
+                <div class="captura-context-bar">
+                    <span class="captura-context-label">Contexto de captura</span>
+                    <span class="captura-context-pill">
+                        {% if subempresa_actual %}
+                            {{ subempresa_actual.nombre }} ({{ empresa_actual.nombre }})
+                        {% else %}
+                            {{ empresa_actual.nombre }} – todas las sub-empresas
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="metric-grid metric-grid-captura">
+                    <div class="card card-kpi-principal">
+                        <h3>Resumen rápido</h3>
+                        <p class="value">
+                            ${{ balance_contexto|floatformat:2|intcomma }}
+                        </p>
+                        <p class="label">
+                            Balance del contexto (activos - pasivos).
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <h3>Movimientos capturados</h3>
+                        <p class="value">{{ total_movimientos }}</p>
+                        <p class="label">
+                            Movimientos registrados para esta empresa / sub-empresa.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <h3>Próximos pagos en rango</h3>
+                        <p class="value">
+                            ${{ total_proximo_pagos|floatformat:2|intcomma }}
+                        </p>
+                        <p class="label">
+                            Suma del monto del próximo pago de cada movimiento futuro.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <h3>Reporte detallado</h3>
+                        <p class="label">
+                            Consulta el reporte y balance financiero completo de este contexto.
+                        </p>
+                        <a href="{% url 'core:balance' %}" class="btn btn-primary">
+                            Ver reporte
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
         </div>
     </div>
 
-    {# Formulario de registro de movimiento #}
+    <!-- {# Formulario de registro de movimiento #}
     {% if puede_capturar %}
     <div class="card" id="registro-movimiento" style="margin-top: 30px;">
         <h3>Registrar nuevo movimiento</h3>
@@ -129,10 +175,10 @@
         </form>
 
     </div>
-    {% endif %}
+    {% endif %} -->
 
     {% if movimientos %}
-    <div class="card" style="margin-top: 20px;">
+    <!-- <div class="card" style="margin-top: 20px;">
         <h3>Movimientos que se deberan pagar a futuro</h3>
         <ul>
         {% for mov in movimientos %}
@@ -147,62 +193,459 @@
             <li>No hay pasivos registrados aún.</li>
         {% endif %}
         </ul>
-    </div>
-    {% endif %}
+    </div> -->
+    
+    <div class="card" style="margin-top: 25px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div>
+                <h3>Movimientos que se deberán pagar a futuro</h3>
+                <p class="label" id="rango-futuro-texto">
+                    Desde {{ futuro_desde|date:"d/m/Y" }} hasta {{ futuro_hasta|date:"d/m/Y" }} (puedes ajustar el rango).
+                </p>
+            </div>
 
-    <div class="card" style="margin-top: 30px;">
-        <h3>Movimientos recientes</h3>
-        <div class="table-container">
-            <table>
+            <form method="get"
+                data-ajax-filter="1"
+                data-target="tabla-mov-futuro"
+                style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                {# Inputs de rango de fecha para futuros #}
+                <label for="id_futuro_desde" style="font-size:0.8rem; color:var(--color-text-light);">
+                    Desde:
+                </label>
+                <input type="date"
+                    id="id_futuro_desde"
+                    name="futuro_desde"
+                    class="input-date-filter"
+                    value="{% if futuro_desde %}{{ futuro_desde|date:'Y-m-d' }}{% endif %}">
+
+                <label for="id_futuro_hasta" style="font-size:0.8rem; color:var(--color-text-light);">
+                    Hasta:
+                </label>
+                <input type="date"
+                    id="id_futuro_hasta"
+                    name="futuro_hasta"
+                    class="input-date-filter"
+                    value="{% if futuro_hasta %}{{ futuro_hasta|date:'Y-m-d' }}{% endif %}">
+
+                {# Mantener filtros de movimientos recientes #}
+                <input type="hidden"
+                    name="mov_desde"
+                    value="{% if mov_desde %}{{ mov_desde|date:'Y-m-d' }}{% endif %}">
+                <input type="hidden"
+                    name="mov_hasta"
+                    value="{% if mov_hasta %}{{ mov_hasta|date:'Y-m-d' }}{% endif %}">
+                <input type="hidden"
+                    name="mov_fecha_campo"
+                    value="{{ mov_fecha_campo|default:'registro' }}">
+
+                {# Botón aplicar (palomita) #}
+                <button type="submit"
+                        class="btn btn-filter-date">
+                    <span class="btn-filter-icon">&#10003;</span>
+                    <span>Aplicar</span>
+                </button>
+
+                {# Botón limpiar filtro (tache) -> vuelve a hoy / hoy+365 #}
+                <button type="submit"
+                        name="reset_futuro_fechas"
+                        value="1"
+                        class="btn btn-filter-clear">
+                    <span class="btn-filter-icon">&#10005;</span>
+                    <span>Limpiar filtro</span>
+                </button>
+            </form>
+        </div>
+
+        <div class="table-container" style="margin-top: 15px;">
+            <table id="tabla-mov-futuro">
                 <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Concepto</th>
-                    <th>Monto</th>
-                    <th>Sub-empresa</th>
-                    <th>Acciones</th>
-                </tr>
+                    <tr>
+                        <th>Acciones</th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort tabla-sort-futuro"
+                            data-field="fecha"
+                            data-state="asc"
+                            style="text-decoration:none;">
+                                Fecha próxima
+                                <span class="orden-icon">▲</span>
+                            </a>
+                        </th>
+                        <th class="col-fechas-pago">
+                            Fechas de pago
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort tabla-sort-futuro"
+                            data-field="concepto"
+                            data-state="off"
+                            style="text-decoration:none;">
+                                Concepto
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort tabla-sort-futuro"
+                            data-field="tipo"
+                            data-state="off"
+                            style="text-decoration:none;">
+                                Tipo
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort tabla-sort-futuro"
+                            data-field="monto"
+                            data-state="off"
+                            style="text-decoration:none;">
+                                Monto pendiente
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort tabla-sort-futuro"
+                            data-field="estado"
+                            data-state="off"
+                            style="text-decoration:none;">
+                                Estado
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                    </tr>
                 </thead>
                 <tbody>
-                {% if movimientos %}
-                    {% for mov in movimientos %}
-                        <tr>
-                            <td>{{ mov.fecha_registro }}</td>
-                            <td>{{ mov.get_tipo_display }}</td>
-                            <td>{{ mov.concepto.nombre }}</td>
-                            <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
-                            <td>
-                                {% if mov.subempresa %}
-                                    {{ mov.subempresa.nombre }}
-                                {% else %}
-                                    –
-                                {% endif %}
-                            </td>
+                    {% for mov in movimientos_futuro %}
+                        <tr
+                            data-fecha="{{ mov.proximo_vencimiento|date:'Y-m-d' }}"
+                            data-concepto="{{ mov.concepto.nombre|lower }}"
+                            data-tipo="{{ mov.tipo }}"
+                            data-monto="{{ mov.monto_proximo_pago|default:0 }}"
+                            data-estado="{{ mov.estatus_label|lower }}"
+                        >
                             <td>
                                 <a href="{% url 'core:movimiento_detalle' mov.id %}"
-                                class="btn btn-secondary btn-sm">
-                                    Detalle
+                                class="tabla-pago-edit tabla-mov-view"
+                                title="Ver detalle">
+                                    ⌕
                                 </a>
-                                <button type="button"
-                                        class="btn btn-danger btn-sm btn-eliminar-mov"
-                                        data-url="{% url 'core:movimiento_eliminar' mov.id %}"
-                                        data-descripcion="{{ mov.concepto.nombre }} - {{ mov.monto_total|floatformat:2 }}">
-                                    Borrar
-                                </button>
+                            </td>
+
+                            {# Fecha próxima en dd/mm/aaaa #}
+                            <td>{{ mov.proximo_vencimiento|date:"d/m/Y" }}</td>
+
+                            {# Columna FECHAS DE PAGO con máximo 10 chips (dd/mm/aaaa) #}
+                            <td class="col-fechas-pago">
+                                {% if mov.fechas_pago_visibles %}
+                                    <div class="fechas-chip-group" data-mov-id="{{ mov.id }}">
+                                        {% for pago in mov.fechas_pago_visibles %}
+                                            <span class="fecha-chip">
+                                                {{ pago.fecha_vencimiento|date:"d/m/Y" }}
+                                            </span>
+                                        {% endfor %}
+
+                                        {% if mov.hay_mas_fechas_pago %}
+                                            <button type="button"
+                                                    class="fecha-chip fecha-chip-ver-mas"
+                                                    data-toggle-fechas="mov-{{ mov.id }}">
+                                                ver más
+                                            </button>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if mov.hay_mas_fechas_pago %}
+                                        <div class="fechas-chip-group fechas-chip-extra"
+                                            id="mov-{{ mov.id }}"
+                                            style="display:none;">
+                                            {% for pago in mov.fechas_pago_ocultas %}
+                                                <span class="fecha-chip fecha-chip-extra-item">
+                                                    {{ pago.fecha_vencimiento|date:"d/m/Y" }}
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="fecha-chip fecha-chip-empty">-</span>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ mov.concepto.nombre }}</td>
+                            <td>{{ mov.get_tipo_display }}</td>
+
+                            {# Monto pendiente = SOLO el monto del PRÓXIMO pago #}
+                            <td>
+                                ${{ mov.monto_proximo_pago|default:0|floatformat:2|intcomma }}
+                            </td>
+
+                            <td>
+                                <span class="estatus-label {{ mov.estatus_css }}">
+                                    {{ mov.estatus_label }}
+                                </span>
                             </td>
                         </tr>
-
+                    {% empty %}
+                        <tr>
+                            <td colspan="7"
+                                style="text-align:center; color:var(--color-text-light); font-size:0.9rem;">
+                                No hay movimientos con pagos pendientes en el rango seleccionado.
+                            </td>
+                        </tr>
                     {% endfor %}
-                {% else %}
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+
+
+
+
+    {% endif %}
+
+    <div class="card" style="margin-top: 25px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div>
+                <h3>Movimientos recientes</h3>
+                <p class="label">
+                    Filtra por fecha de los movimientos.
+                </p>
+            </div>
+
+            <form method="get"
+                data-ajax-filter="1"
+                data-target="tabla-movimientos"
+                style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                {# Selector de qué fecha usar #}
+                <label for="id_mov_fecha_campo" style="font-size:0.8rem; color:var(--color-text-light);">
+                    Filtrar por:
+                </label>
+                <select id="id_mov_fecha_campo"
+                        name="mov_fecha_campo"
+                        class="input-date-filter">
+                    <option value="registro"
+                        {% if mov_fecha_campo == "registro" or not mov_fecha_campo %}selected{% endif %}>
+                        Fecha del registro
+                    </option>
+                    <option value="inicio"
+                        {% if mov_fecha_campo == "inicio" %}selected{% endif %}>
+                        Fecha de inicio de pago
+                    </option>
+                </select>
+
+                {# Inputs de rango de fecha #}
+                <label for="id_mov_desde" style="font-size:0.8rem; color:var(--color-text-light);">
+                    Desde:
+                </label>
+                <input type="date"
+                    id="id_mov_desde"
+                    name="mov_desde"
+                    class="input-date-filter"
+                    value="{% if mov_desde %}{{ mov_desde|date:'Y-m-d' }}{% endif %}">
+
+                <label for="id_mov_hasta" style="font-size:0.8rem; color:var(--color-text-light);">
+                    Hasta:
+                </label>
+                <input type="date"
+                    id="id_mov_hasta"
+                    name="mov_hasta"
+                    class="input-date-filter"
+                    value="{% if mov_hasta %}{{ mov_hasta|date:'Y-m-d' }}{% endif %}">
+
+                <!-- Mantener también el rango de futuros -->
+                <input type="hidden" name="futuro_desde" value="{% if futuro_desde %}{{ futuro_desde|date:"Y-m-d" }}{% endif %}">
+                <input type="hidden" name="futuro_hasta" value="{% if futuro_hasta %}{{ futuro_hasta|date:"Y-m-d" }}{% endif %}">
+
+                <!-- Orden actual de movimientos recientes -->
+                <input type="hidden" name="orden_mov" id="id_orden_mov" value="{{ orden_mov }}">
+
+
+                {# Botón aplicar (palomita) #}
+                <button type="submit"
+                        class="btn btn-filter-date">
+                    <span class="btn-filter-icon">&#10003;</span>
+                    <span>Aplicar</span>
+                </button>
+
+                {# Botón limpiar filtro (tache) #}
+                <button type="submit"
+                        name="reset_mov_fechas"
+                        value="1"
+                        class="btn btn-filter-clear">
+                    <span class="btn-filter-icon">&#10005;</span>
+                    <span>Limpiar filtro</span>
+                </button>
+            </form>
+
+        </div>
+
+        <div class="table-container">
+            <table id="tabla-movimientos">
+                <thead>
                     <tr>
-                        <td colspan="5" style="text-align:center; color:var(--color-text-light);">
-                            No hay movimientos registrados aún para este contexto.
-                        </td>
+                        <th>Acciones</th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="fecha_registro"
+                            data-state="asc">
+                                Fecha registro
+                                <span class="orden-icon">▲</span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="folio"
+                            data-state="off">
+                                Folio
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="tipo"
+                            data-state="off">
+                                Tipo
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="concepto"
+                            data-state="off">
+                                Concepto
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+
+                        {% if not subempresa_actual %}
+                            <th>
+                                <a href="#"
+                                class="tabla-sort"
+                                data-field="subempresa"
+                                data-state="off">
+                                    Sub-empresa
+                                    <span class="orden-icon"></span>
+                                </a>
+                            </th>
+                        {% endif %}
+
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="monto_total"
+                            data-state="off">
+                                Monto
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="estado"
+                            data-state="off">
+                                Estado
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="fecha_inicio"
+                            data-state="off">
+                                Fecha inicio pago
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="frecuencia"
+                            data-state="off">
+                                Frecuencia
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#"
+                            class="tabla-sort"
+                            data-field="numero_pagos"
+                            data-state="off">
+                                # Pagos
+                                <span class="orden-icon"></span>
+                            </a>
+                        </th>
                     </tr>
-                {% endif %}
+                </thead>
+                <tbody>
+                    {% for mov in movimientos %}
+                        <tr
+                            data-fecha-registro="{{ mov.fecha_registro|date:'Y-m-d' }}"
+                            data-folio="{{ mov.folio }}"
+                            data-tipo="{{ mov.tipo }}"
+                            data-concepto="{{ mov.concepto.nombre|lower }}"
+                            {% if not subempresa_actual %}
+                                data-subempresa="{% if mov.subempresa %}{{ mov.subempresa.nombre|lower }}{% else %}{% endif %}"
+                            {% endif %}
+                            data-monto-total="{{ mov.monto_total }}"
+                            data-estado="{{ mov.estatus_label|lower }}"
+                            data-fecha-inicio="{{ mov.fecha_inicio|date:'Y-m-d' }}"
+                            data-frecuencia="{{ mov.frecuencia_pago }}"
+                            data-numero-pagos="{{ mov.numero_pagos }}"
+                        >
+                            <td>
+                                <a href="{% url 'core:movimiento_detalle' mov.id %}"
+                                class="tabla-pago-edit tabla-mov-view"
+                                title="Ver detalle">
+                                    ⌕
+                                </a>
+
+                                {# aquí reaprovecha tu botón actual de borrar, solo cambiando icono y clases #}
+                                <button type="button"
+                                        class="tabla-pago-edit tabla-mov-delete"
+                                        title="Borrar movimiento"
+                                        data-mov-id="{{ mov.id }}">
+                                    ✕
+                                </button>
+                            </td>
+
+                            <td>{{ mov.fecha_registro|date:"d/m/Y" }}</td>
+                            <td>{{ mov.folio }}</td>
+                            <td>{{ mov.get_tipo_display }}</td>
+                            <td>{{ mov.concepto.nombre }}</td>
+                            {% if not subempresa_actual %}
+                                <td>
+                                    {% if mov.subempresa %}
+                                        {{ mov.subempresa.nombre }}
+                                    {% else %}
+                                        –
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                            <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
+                            <td>
+                                <span class="estatus-label {{ mov.estatus_css }}">
+                                    {{ mov.estatus_label }}
+                                </span>
+                            </td>
+                            <td>{{ mov.fecha_inicio|date:"d/m/Y" }}</td>
+                            <td>{{ mov.get_frecuencia_pago_display }}</td>
+                            <td>{{ mov.numero_pagos }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="11">
+                                No hay movimientos registrados aún para este contexto.
+                            </td>
+                        </tr>
+                    {% endfor %}
                 </tbody>
             </table>
+
         </div>
     </div>
 
@@ -227,6 +670,122 @@
         </form>
     </div>
 </div>
+
+<!-- Modal de registro de un movimiento -->
+<div id="modal-nuevo-mov" class="modal-overlay {% if abrir_modal_mov %}is-open{% endif %}">
+    <div class="modal-dialog">
+        <h3 style="margin-top: 0; margin-bottom: 6px;">Registrar nuevo movimiento</h3>
+        <p style="margin-top: 0; margin-bottom: 14px; font-size: 0.85rem; color: var(--color-text-light);">
+            Los montos y fechas se guardarán para la sub-empresa seleccionada en el menú lateral.
+        </p>
+
+        <form method="post" class="form" id="form-movimiento">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+
+            <div class="form-grid">
+                <div class="form-group">
+                    {{ form.tipo.label_tag }}
+                    {{ form.tipo }}
+                    {{ form.tipo.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.concepto_nombre.label_tag }}
+                    {{ form.concepto_nombre }}
+                    {{ form.concepto_nombre.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.monto_total.label_tag }}
+                    {{ form.monto_total }}
+                    {{ form.monto_total.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.fecha_registro.label_tag }}
+                    {{ form.fecha_registro }}
+                    {{ form.fecha_registro.errors }}
+                </div>
+                    <div class="form-group">
+                    {{ form.fecha_inicio.label_tag }}
+                    {{ form.fecha_inicio }}
+                    {{ form.fecha_inicio.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.numero_pagos.label_tag }}
+                    {{ form.numero_pagos }}
+                    {{ form.numero_pagos.errors }}
+                </div>
+                <div class="form-group">
+                    {{ form.frecuencia_pago.label_tag }}
+                    {{ form.frecuencia_pago }}
+                    {{ form.frecuencia_pago.errors }}
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+                {{ form.descripcion.label_tag }}
+                {{ form.descripcion }}
+                {{ form.descripcion.errors }}
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+                {{ form.observaciones.label_tag }}
+                {{ form.observaciones }}
+                {{ form.observaciones.errors }}
+            </div>
+
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button type="button"
+                        class="btn btn-secondary"
+                        id="cerrar-modal-nuevo-mov">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    Guardar movimiento
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+<!-- JS para abrir y cerrar el modal de registro de movimientos -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const overlay = document.getElementById("modal-nuevo-mov");
+    const abrirBtns = document.querySelectorAll(".btn-nuevo-movimiento");
+    const cerrarBtn = document.getElementById("cerrar-modal-nuevo-mov");
+
+    function abrirModal() {
+        if (overlay) overlay.classList.add("is-open");
+    }
+
+    function cerrarModal() {
+        if (overlay) overlay.classList.remove("is-open");
+    }
+
+    abrirBtns.forEach(function (btn) {
+        btn.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            abrirModal();
+        });
+    });
+
+    if (cerrarBtn) {
+        cerrarBtn.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            cerrarModal();
+        });
+    }
+
+    if (overlay) {
+        overlay.addEventListener("click", function (ev) {
+            if (ev.target === overlay) {
+                cerrarModal();
+            }
+        });
+    }
+});
+</script>
+
 
 <!-- JS para el modal -->
 <script>
@@ -268,6 +827,275 @@ document.addEventListener("DOMContentLoaded", function () {
         if (e.key === "Escape") {
             cerrarModal();
         }
+    });
+});
+</script>
+
+<!-- JS para los filtros de ordenamiento de 3 estados en la tabla de Movimientos que se deberán pagar a futuro -->
+<script>
+function initTablaMovFuturoSort() {
+    const table = document.getElementById('tabla-mov-futuro');
+    if (!table) return;
+
+    const tbody = table.querySelector('tbody');
+    const headers = table.querySelectorAll('.tabla-sort-futuro');
+
+    let currentField = 'fecha';
+    let currentDir = 'asc';
+
+    function getKeyFuturo(row, field) {
+        const ds = row.dataset;
+        if (field === 'fecha')   return ds.fecha || '';
+        if (field === 'concepto') return ds.concepto || '';
+        if (field === 'tipo')    return ds.tipo || '';
+        if (field === 'monto')   return parseFloat(ds.monto || '0') || 0;
+        if (field === 'estado')  return ds.estado || '';
+        return '';
+    }
+
+    function sortByFuturo(field, dir) {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort(function (a, b) {
+            const va = getKeyFuturo(a, field);
+            const vb = getKeyFuturo(b, field);
+            if (va === vb) return 0;
+            if (dir === 'asc') {
+                return va > vb ? 1 : -1;
+            }
+            return va > vb ? -1 : 1;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    }
+
+    function updateHeaderStatesFuturo() {
+        headers.forEach(function (h) {
+            const state = h.dataset.state || 'off';
+            const icon = h.querySelector('.orden-icon');
+            if (!icon) return;
+
+            if (state === 'asc') {
+                icon.textContent = '▲';
+            } else if (state === 'desc') {
+                icon.textContent = '▼';
+            } else {
+                icon.textContent = '';
+            }
+        });
+    }
+
+    headers.forEach(function (h) {
+        h.addEventListener('click', function (e) {
+            e.preventDefault();
+
+            const field = h.dataset.field;
+            let state = h.dataset.state || 'off';
+
+            if (state === 'off') {
+                state = 'asc';
+            } else if (state === 'asc') {
+                state = 'desc';
+            } else {
+                state = 'off';
+            }
+
+            headers.forEach(function (other) {
+                if (other !== h) {
+                    other.dataset.state = 'off';
+                }
+            });
+            h.dataset.state = state;
+
+            if (state === 'off') {
+                currentField = 'fecha';
+                currentDir = 'asc';
+            } else {
+                currentField = field;
+                currentDir = state;
+            }
+
+            sortByFuturo(currentField, currentDir);
+            updateHeaderStatesFuturo();
+        });
+    });
+
+    // Orden inicial por fecha próxima ascendente
+    sortByFuturo(currentField, currentDir);
+    updateHeaderStatesFuturo();
+}
+
+document.addEventListener('DOMContentLoaded', initTablaMovFuturoSort);
+</script>
+
+
+
+<!-- JS para los filtros de ordenamiento de 3 estados en la tabla de Movimientos recientes vía backend + AJAX -->
+<script>
+function initTablaMovimientosSort() {
+    const table = document.getElementById('tabla-movimientos');
+    const form = document.querySelector('form[data-ajax-filter="1"][data-target="tabla-movimientos"]');
+    const inputOrdenMov = document.getElementById('id_orden_mov');
+
+    if (!table || !form || !inputOrdenMov) return;
+
+    const headers = table.querySelectorAll('.tabla-sort');
+
+    // Mapeo entre data-field del <th> y el campo real usado en orden_mov en el backend
+    const fieldMap = {
+        'fecharegistro': 'fecha_registro',
+        'folio': 'folio',
+        'tipo': 'tipo',
+        'concepto': 'concepto__nombre',
+        'subempresa': 'subempresa__nombre',
+        'montototal': 'monto_total',
+        'estado': 'estado',
+        'fechainicio': 'fecha_inicio',
+        'frecuencia': 'frecuencia_pago',
+        'numeropagos': 'numero_pagos',
+    };
+
+    function updateHeaderStates() {
+        const orden = inputOrdenMov.value || '-fecha_registro';
+
+        headers.forEach(function (h) {
+            const field = h.dataset.field;
+            const base = fieldMap[field];
+            const icon = h.querySelector('.orden-icon');
+            let state = 'off';
+
+            if (base) {
+                if (orden === base) {
+                    state = 'asc';
+                } else if (orden === '-' + base) {
+                    state = 'desc';
+                }
+            }
+
+            h.dataset.state = state;
+
+            if (!icon) return;
+            if (state === 'asc') {
+                icon.textContent = '▲';
+            } else if (state === 'desc') {
+                icon.textContent = '▼';
+            } else {
+                icon.textContent = '';
+            }
+        });
+    }
+
+    headers.forEach(function (h) {
+        h.addEventListener('click', function (e) {
+            e.preventDefault();
+
+            const field = h.dataset.field;
+            const base = fieldMap[field];
+            if (!base) return;
+
+            // Rotar el estado actual del encabezado
+            let state = h.dataset.state || 'off';
+            if (state === 'off') {
+                state = 'asc';
+            } else if (state === 'asc') {
+                state = 'desc';
+            } else {
+                state = 'off';
+            }
+
+            // Calcular nuevo valor de orden_mov para el backend
+            let nuevoOrden;
+            if (state === 'off') {
+                nuevoOrden = '-fecha_registro';  // default
+            } else if (state === 'asc') {
+                nuevoOrden = base;
+            } else {
+                nuevoOrden = '-' + base;
+            }
+
+            inputOrdenMov.value = nuevoOrden;
+
+            // Enviar el formulario por AJAX (lo intercepta el script de filtros)
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        });
+    });
+
+    // Sincronizar visualmente los encabezados con el orden actual al cargar
+    updateHeaderStates();
+}
+
+document.addEventListener('DOMContentLoaded', initTablaMovimientosSort);
+</script>
+
+
+<!-- JS para aplicar filtros dinámicamente sin recargar la página -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Filtros de fecha sin recargar la página (AJAX)
+    const filterForms = document.querySelectorAll('form[data-ajax-filter="1"]');
+
+    filterForms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const targetTableId = form.dataset.target;
+            const table = document.getElementById(targetTableId);
+            if (!table) return;
+
+            const url = form.action || window.location.pathname;
+            const params = new URLSearchParams(new FormData(form));
+
+            fetch(url + '?' + params.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function (resp) {
+                return resp.text();
+            })
+            .then(function (html) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newTable = doc.getElementById(targetTableId);
+                if (!newTable) return;
+
+                // Para la tabla de futuros, también actualizamos el texto de rango
+                if (targetTableId === 'tabla-mov-futuro') {
+                    const newRange = doc.getElementById('rango-futuro-texto');
+                    const currentRange = document.getElementById('rango-futuro-texto');
+                    if (newRange && currentRange) {
+                        currentRange.innerHTML = newRange.innerHTML;
+                    }
+                }
+
+                // Reemplazar solo el contenido de la tabla (cabecera + cuerpo)
+                table.innerHTML = newTable.innerHTML;
+
+                // Re‑inicializar ordenamiento sobre la nueva tabla
+                if (targetTableId === 'tabla-mov-futuro') {
+                    initTablaMovFuturoSort();
+                } else if (targetTableId === 'tabla-movimientos') {
+                    initTablaMovimientosSort();
+                }
+            })
+            .catch(function (err) {
+                console.error('Error al actualizar tabla por filtros', err);
+            });
+        });
+    });
+
+    // Toggle "ver más" / "ver menos" en fechas de pago (delegado al documento)
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.fecha-chip-ver-mas');
+        if (!btn) return;
+
+        const targetId = btn.dataset.toggleFechas;
+        const extra = document.getElementById(targetId);
+        if (!extra) return;
+
+        const isHidden = extra.style.display === 'none' || !extra.style.display;
+        extra.style.display = isHidden ? 'block' : 'none';
+        btn.textContent = isHidden ? 'ver menos' : 'ver más';
     });
 });
 </script>
@@ -359,9 +1187,5 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 </script>
-
-
-
-
 
 {% endblock %}

@@ -8,7 +8,7 @@ from django.db.models import Sum, Q
 from django.contrib.admin.views.decorators import staff_member_required
 from .forms import MovimientoForm, PagoForm
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP  # <-- añade esto
+from decimal import Decimal, ROUND_HALF_UP
 
 def _generar_pagos_iniciales(mov: Movimiento):
     """
@@ -294,10 +294,35 @@ def dashboard_view(request):
     return render(request, "core/dashboard.html", ctx)
 '''
 
+def _calcular_estatus_mov(mov: Movimiento, hoy: date):
+    """
+    Devuelve (label, clase_css) según los pagos del movimiento.
+    """
+    pagos_qs = mov.pagos.all()
+
+    total_pagado = (
+        pagos_qs.filter(esta_pagado=True)
+        .aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    )
+    total_pendiente = (mov.monto_total or Decimal("0")) - total_pagado
+
+    hay_pagos_pendientes = pagos_qs.filter(esta_pagado=False).exists()
+    hay_pagos_atrasados = pagos_qs.filter(
+        esta_pagado=False,
+        fecha_vencimiento__lt=hoy,
+    ).exists()
+
+    if total_pendiente <= 0 or not hay_pagos_pendientes:
+        return "Saldado", "estatus-label-saldado"
+    elif hay_pagos_atrasados:
+        return "Atrasado", "estatus-label-atrasado"
+    else:
+        return "Con saldo pendiente", "estatus-label-pendiente"
+
+
 @login_required(login_url="core:login")
 def captura_view(request):
     ctx = _contexto_usuario(request)
-
     empresa = ctx["empresa_actual"]
     subempresa = ctx["subempresa_actual"]
 
@@ -308,16 +333,90 @@ def captura_view(request):
             "movimientos": [],
             "total_activos": 0,
             "total_pasivos": 0,
+            "balance_contexto": 0,
+            "total_movimientos": 0,
+            "total_movimientos_futuro": 0,
+            "total_proximo_pagos": 0,
         })
         return render(request, "core/captura.html", ctx)
 
+    # Query base de movimientos para la sub-empresa actual
     qs = Movimiento.objects.filter(
         empresa=empresa,
         subempresa=subempresa,
-    ).order_by("-fecha_registro", "-id")
+    ).prefetch_related("pagos")
 
+    hoy = date.today()
+
+    # ----------------------------
+    # 1) Filtro de fechas: MOVIMIENTOS RECIENTES
+    # ----------------------------
+    fecha_desde_str = request.GET.get("mov_desde")
+    fecha_hasta_str = request.GET.get("mov_hasta")
+
+    # Selector de qué fecha usar en el filtro (registro / inicio)
+    mov_fecha_campo = request.GET.get("mov_fecha_campo", "registro")
+    if mov_fecha_campo not in ("registro", "inicio"):
+        mov_fecha_campo = "registro"
+
+    fecha_desde = None
+    fecha_hasta = None
+
+    # Si el usuario pulsa "Limpiar filtro" en movimientos recientes, ignoramos fechas
+    reset_mov_fechas = request.GET.get("reset_mov_fechas")
+    if not reset_mov_fechas:
+        if fecha_desde_str:
+            try:
+                # Soporta valores enviados por <input type="date"> (YYYY-MM-DD)
+                fecha_desde = date.fromisoformat(fecha_desde_str)
+            except ValueError:
+                fecha_desde = None
+
+        if fecha_hasta_str:
+            try:
+                fecha_hasta = date.fromisoformat(fecha_hasta_str)
+            except ValueError:
+                fecha_hasta = None
+
+        # Aplicar filtros según el campo elegido
+        if fecha_desde:
+            if mov_fecha_campo == "inicio":
+                qs = qs.filter(fecha_inicio__gte=fecha_desde)
+            else:
+                qs = qs.filter(fecha_registro__gte=fecha_desde)
+
+        if fecha_hasta:
+            if mov_fecha_campo == "inicio":
+                qs = qs.filter(fecha_inicio__lte=fecha_hasta)
+            else:
+                qs = qs.filter(fecha_registro__lte=fecha_hasta)
+
+    # Orden de la tabla de movimientos recientes
+    orden_mov = request.GET.get("orden_mov", "-fecha_registro")
+    campos_mov_permitidos = {
+        "fecha_registro", "-fecha_registro",
+        "tipo", "-tipo",
+        "concepto__nombre", "-concepto__nombre",
+        "monto_total", "-monto_total",
+        "subempresa__nombre", "-subempresa__nombre",
+        "estado", "-estado",
+        "fecha_inicio", "-fecha_inicio",
+        "frecuencia_pago", "-frecuencia_pago",
+        "numero_pagos", "-numero_pagos",
+    }
+    if orden_mov not in campos_mov_permitidos:
+        orden_mov = "-fecha_registro"
+
+    qs = qs.order_by(orden_mov, "-id")
+
+    # ----------------------------
+    # 2) Alta de movimiento (modal)
+    # ----------------------------
+    abrir_modal_mov = False
     if request.method == "POST":
         form = MovimientoForm(request.POST)
+        abrir_modal_mov = True
+
         if form.is_valid():
             mov = form.save(commit=False)
 
@@ -326,23 +425,14 @@ def captura_view(request):
             concepto, _ = ConceptoMovimiento.objects.get_or_create(
                 nombre=nombre_concepto
             )
-            mov.concepto = concepto
 
+            mov.concepto = concepto
             mov.empresa = empresa
             mov.subempresa = subempresa
             mov.usuario_captura = request.user
-
-            # Fecha de registro = hoy, inmutable
             mov.fecha_registro = date.today()
+            mov.save()
 
-            # Frecuencia usa lo que venga del formulario
-            mov.save()  # aquí se generará el folio automático
-
-            mov.fecha_registro = date.today()
-            # Frecuencia usa lo que venga del formulario
-            mov.save()  # aquí se generará el folio automático
-
-            # NUEVO: generar pagos iniciales
             _generar_pagos_iniciales(mov)
 
             messages.success(request, "Movimiento registrado correctamente.")
@@ -350,14 +440,127 @@ def captura_view(request):
     else:
         form = MovimientoForm()
 
+    if request.GET.get("open_modal") == "1":
+        abrir_modal_mov = True
+
+    # ----------------------------
+    # 3) Totales de activos / pasivos del contexto (sub-empresa)
+    # ----------------------------
     total_activos = (
         qs.filter(tipo=Movimiento.TipoMovimiento.ACTIVO)
-          .aggregate(total=Sum("monto_total"))["total"] or 0
+        .aggregate(total=Sum("monto_total"))["total"] or 0
     )
     total_pasivos = (
         qs.filter(tipo=Movimiento.TipoMovimiento.PASIVO)
-          .aggregate(total=Sum("monto_total"))["total"] or 0
+        .aggregate(total=Sum("monto_total"))["total"] or 0
     )
+
+    # Balance del contexto de captura: A - P
+    balance_contexto = total_activos - total_pasivos
+
+    # ----------------------------
+    # 4) Sección "Movimientos que se deberán pagar a futuro"
+    # ----------------------------
+    futuro_desde_str = request.GET.get("futuro_desde")
+    futuro_hasta_str = request.GET.get("futuro_hasta")
+
+    futuro_desde = None
+    futuro_hasta = None
+
+    # Si el usuario pulsa "Limpiar filtro" en futuros, regresamos al rango por defecto
+    reset_futuro_fechas = request.GET.get("reset_futuro_fechas")
+    if not reset_futuro_fechas:
+        if futuro_desde_str:
+            try:
+                futuro_desde = date.fromisoformat(futuro_desde_str)
+            except ValueError:
+                futuro_desde = None
+
+        if futuro_hasta_str:
+            try:
+                futuro_hasta = date.fromisoformat(futuro_hasta_str)
+            except ValueError:
+                futuro_hasta = None
+
+    # Valores por defecto del rango de futuros (hoy -> hoy + 365 días)
+    if not futuro_desde:
+        futuro_desde = hoy
+    if not futuro_hasta:
+        futuro_hasta = hoy + timedelta(days=365)
+
+    from django.db.models import Min
+
+    movimientos_futuro = (
+        Movimiento.objects
+        .filter(
+            empresa=empresa,
+            subempresa=subempresa,
+            pagos__esta_pagado=False,
+            pagos__fecha_vencimiento__gte=futuro_desde,
+            pagos__fecha_vencimiento__lte=futuro_hasta,
+        )
+        .annotate(
+            # Próxima fecha de pago dentro del rango
+            proximo_vencimiento=Min(
+                "pagos__fecha_vencimiento",
+                filter=Q(
+                    pagos__esta_pagado=False,
+                    pagos__fecha_vencimiento__gte=futuro_desde,
+                ),
+            ),
+        )
+        .order_by("proximo_vencimiento", "id")
+        .prefetch_related("pagos")
+    )
+
+    # ----------------------------
+    # 5) Estatus dinámico y cálculos por movimiento
+    # ----------------------------
+
+    # a) Movimientos recientes
+    for mov in qs:
+        label, css = _calcular_estatus_mov(mov, hoy)
+        mov.estatus_label = label
+        mov.estatus_css = css
+
+    # b) Movimientos a futuro: chips de fechas y monto solo del PRÓXIMO pago
+    total_proximo_pagos = Decimal("0")
+
+    for mov in movimientos_futuro:
+        label, css = _calcular_estatus_mov(mov, hoy)
+        mov.estatus_label = label
+        mov.estatus_css = css
+
+        # Pagos futuros (no pagados, dentro del rango) ordenados por fecha
+        pagos_futuros = [
+            p for p in mov.pagos.all()
+            if (
+                not p.esta_pagado
+                and p.fecha_vencimiento
+                and futuro_desde <= p.fecha_vencimiento <= futuro_hasta
+            )
+        ]
+        pagos_futuros.sort(key=lambda p: p.fecha_vencimiento)
+
+        # Máximo 10 chips: 9 fechas + 1 "ver más"
+        mov.fechas_pago_visibles = pagos_futuros[:9]
+        mov.hay_mas_fechas_pago = len(pagos_futuros) > 9
+        mov.fechas_pago_ocultas = pagos_futuros[9:]
+
+        # Monto pendiente mostrado en la tabla:
+        # SOLO el monto del próximo pago dentro del rango
+        if pagos_futuros:
+            mov.monto_proximo_pago = pagos_futuros[0].monto or Decimal("0")
+        else:
+            mov.monto_proximo_pago = Decimal("0")
+
+        total_proximo_pagos += mov.monto_proximo_pago
+
+    # ----------------------------
+    # 6) Métricas para el resumen rápido
+    # ----------------------------
+    total_movimientos = qs.count()
+    total_movimientos_futuro = movimientos_futuro.count()
 
     ctx.update({
         "puede_capturar": True,
@@ -365,6 +568,20 @@ def captura_view(request):
         "movimientos": qs,
         "total_activos": total_activos,
         "total_pasivos": total_pasivos,
+        "balance_contexto": balance_contexto,
+        "orden_mov": orden_mov,
+        "abrir_modal_mov": abrir_modal_mov,
+        "movimientos_futuro": movimientos_futuro,
+        "futuro_desde": futuro_desde,
+        "futuro_hasta": futuro_hasta,
+        "hoy": hoy,
+        "mov_desde": fecha_desde,
+        "mov_hasta": fecha_hasta,
+        "mov_fecha_campo": mov_fecha_campo,
+        # Resumen rápido
+        "total_movimientos": total_movimientos,
+        "total_movimientos_futuro": total_movimientos_futuro,
+        "total_proximo_pagos": total_proximo_pagos,
     })
 
     return render(request, "core/captura.html", ctx)
@@ -401,22 +618,33 @@ def pago_editar_view(request, movimiento_id: int, pk: int):
     mov = get_object_or_404(Movimiento, pk=movimiento_id)
     pago = get_object_or_404(Pago, pk=pk, movimiento=mov)
 
-    # Permisos iguales a movimiento_detalle_view
-    if not request.user.is_superuser:
+    # Permisos de edición (mismas reglas que en movimiento_detalle_view)
+    if request.user.is_superuser:
+        allowed = True
+    else:
         memberships = UsuarioEmpresa.objects.filter(
             usuario=request.user,
             empresa=mov.empresa,
-            puede_leer=True,
+            puede_escribir=True,
         )
+
         if mov.subempresa:
-            allowed = memberships.filter(
+            memberships = memberships.filter(
                 Q(subempresa__isnull=True) | Q(subempresa=mov.subempresa)
-            ).exists()
+            )
         else:
-            allowed = memberships.filter(subempresa__isnull=True).exists()
-        if not allowed:
-            messages.error(request, "No tienes permiso para editar pagos de este movimiento.")
-            return redirect("core:movimiento_detalle", pk=mov.pk)
+            memberships = memberships.filter(subempresa__isnull=True)
+
+        allowed = memberships.filter(
+            rol__in=[UsuarioEmpresa.Rol.ADMIN, UsuarioEmpresa.Rol.FINANCIERO]
+        ).exists()
+
+    if not allowed:
+        messages.error(
+            request,
+            "No tienes permiso para editar pagos de este movimiento.",
+        )
+        return redirect("core:movimiento_detalle", pk=mov.pk)
 
     if request.method == "POST":
         form = PagoForm(request.POST, instance=pago)
@@ -434,7 +662,10 @@ def pago_editar_view(request, movimiento_id: int, pk: int):
             # Recalcular sugerencias para los pagos pendientes
             _recalcular_pagos_pendientes(mov)
 
-            messages.success(request, f"Pago {pago.numero_pago} actualizado correctamente.")
+            messages.success(
+                request,
+                f"Pago {pago.numero_pago} actualizado correctamente.",
+            )
             return redirect("core:movimiento_detalle", pk=mov.pk)
     else:
         # Sugerir fecha de hoy si todavía no tiene fecha_pago
@@ -443,17 +674,65 @@ def pago_editar_view(request, movimiento_id: int, pk: int):
         else:
             form = PagoForm(instance=pago)
 
-    # Para un flujo no-AJAX puedes tener una plantilla simple,
-    # pero si usarás solo modal vía JS puedes devolver un fragmento HTML.
-    return render(
-        request,
-        "core/pago_editar_modal.html",
-        {
-            "movimiento": mov,
-            "pago": pago,
-            "form": form,
-        },
+    # Totales del movimiento (igual que antes)
+    total_pagado = (
+        mov.pagos.filter(esta_pagado=True)
+        .aggregate(total=Sum("monto"))["total"] or 0
     )
+    total_pendiente = mov.monto_total - total_pagado
+
+    # Monto actual de ESTE pago
+    pago_monto_actual = pago.monto or Decimal("0")
+
+    # Base para el cálculo en el modal:
+    # - Si el pago está pagado, el pendiente "hipotético" si lo pusieras en 0
+    #   es: pendiente_global + monto_original_de_este_pago
+    # - Si el pago está pendiente, el pendiente ya incluye este pago,
+    #   así que usamos total_pendiente tal cual.
+    if pago.esta_pagado:
+        base_pendiente = total_pendiente + pago_monto_actual
+    else:
+        base_pendiente = total_pendiente
+
+    # Etiquetas según tipo y si es diferido (esto lo dejas igual)
+    es_activo = mov.tipo == Movimiento.TipoMovimiento.ACTIVO
+    es_pasivo = mov.tipo == Movimiento.TipoMovimiento.PASIVO
+    es_diferido = mov.numero_pagos > 1
+
+    if es_activo and es_diferido:
+        label_pagado = "Cantidad recibida"
+        label_pendiente = "Cantidad por recibir"
+    elif es_pasivo and es_diferido:
+        label_pagado = "Cantidad pagada"
+        label_pendiente = "Cantidad por pagar"
+    else:
+        label_pagado = "Cantidad pagada"
+        label_pendiente = "Cantidad pendiente"
+
+    # Lógica de color (sin cambios)
+    if es_activo:
+        clase_total_pendiente = "mov-pendiente-azul"
+    else:
+        if total_pendiente > 0:
+            clase_total_pendiente = "mov-pendiente-alerta"
+        elif total_pendiente == 0:
+            clase_total_pendiente = "mov-pendiente-verde"
+        else:
+            clase_total_pendiente = "mov-pendiente-azul"
+
+    ctx = {
+        "movimiento": mov,
+        "pago": pago,
+        "form": form,
+        "total_pagado": total_pagado,
+        "total_pendiente": total_pendiente,  # sigue disponible si lo usas en otro lado
+        "base_pendiente": base_pendiente,    # base real para el modal
+        "label_pendiente": label_pendiente,
+        "clase_total_pendiente": clase_total_pendiente,
+        "es_activo": es_activo,
+    }
+
+    return render(request, "core/pago_editar_modal.html", ctx)
 
 
 @login_required(login_url="core:login")
@@ -547,24 +826,27 @@ def balance_view(request):
 @login_required(login_url="core:login")
 def movimiento_detalle_view(request, pk: int):
     mov = get_object_or_404(
-        Movimiento.objects.select_related("empresa", "subempresa", "concepto", "usuario_captura")
-                          .prefetch_related("pagos"),
+        Movimiento.objects.select_related(
+            "empresa", "subempresa", "concepto", "usuario_captura"
+        ).prefetch_related("pagos"),
         pk=pk,
     )
 
-    # Permisos (igual que ya tienes)
+    # Permisos de lectura (ver detalle del movimiento)
     if not request.user.is_superuser:
         memberships = UsuarioEmpresa.objects.filter(
             usuario=request.user,
             empresa=mov.empresa,
             puede_leer=True,
         )
+
         if mov.subempresa:
             allowed = memberships.filter(
                 Q(subempresa__isnull=True) | Q(subempresa=mov.subempresa)
             ).exists()
         else:
             allowed = memberships.filter(subempresa__isnull=True).exists()
+
         if not allowed:
             messages.error(request, "No tienes permiso para ver este movimiento.")
             return redirect("core:balance")
@@ -597,6 +879,39 @@ def movimiento_detalle_view(request, pk: int):
     )
     total_pendiente = mov.monto_total - total_pagado
 
+    # Fecha límite de pago = fecha de vencimiento del último pago generado
+    fecha_limite_pago = (
+        mov.pagos.order_by("-fecha_vencimiento")
+        .values_list("fecha_vencimiento", flat=True)
+        .first()
+    )
+
+    # Estatus del movimiento (pendiente / atrasado / saldado)
+    hoy = date.today()
+    hay_pagos_pendientes = mov.pagos.filter(esta_pagado=False).exists()
+    hay_pagos_atrasados = mov.pagos.filter(
+        esta_pagado=False,
+        fecha_vencimiento__lt=hoy,
+    ).exists()
+
+    if total_pendiente <= 0 or not hay_pagos_pendientes:
+        estatus_mov = "Saldado"
+    elif hay_pagos_atrasados:
+        estatus_mov = "Atrasado"
+    else:
+        estatus_mov = "Con saldo pendiente"
+
+    # Clase visual para la celda de "cantidad por pagar"
+    if mov.tipo == Movimiento.TipoMovimiento.ACTIVO:
+        clase_total_pendiente = "mov-pendiente-azul"
+    else:
+        if total_pendiente > 0:
+            clase_total_pendiente = "mov-pendiente-alerta"
+        elif total_pendiente == 0:
+            clase_total_pendiente = "mov-pendiente-verde"
+        else:
+            clase_total_pendiente = "mov-pendiente-azul"
+
     # Etiquetas según tipo y si es diferido
     es_activo = mov.tipo == Movimiento.TipoMovimiento.ACTIVO
     es_pasivo = mov.tipo == Movimiento.TipoMovimiento.PASIVO
@@ -612,10 +927,36 @@ def movimiento_detalle_view(request, pk: int):
         label_pagado = "Cantidad pagada"
         label_pendiente = "Cantidad pendiente"
 
-    # Siguiente número de pago (para mostrar en input deshabilitado)
+    # Sin formulario activo, no hay error global
+    form_error_global = ""
+
+    # Siguiente número de pago sugerido (por si reactives el formulario)
     siguiente_numero_pago = mov.pagos.count() + 1
 
-    # Calcular fecha de vencimiento automática
+    # Permisos de edición:
+    # - Superuser: siempre
+    # - ADMIN / FINANCIERO con puede_escribir=True y acceso a la subempresa
+    if request.user.is_superuser:
+        puede_editar = True
+    else:
+        memberships_edit = UsuarioEmpresa.objects.filter(
+            usuario=request.user,
+            empresa=mov.empresa,
+            puede_escribir=True,
+        )
+
+        if mov.subempresa:
+            memberships_edit = memberships_edit.filter(
+                Q(subempresa__isnull=True) | Q(subempresa=mov.subempresa)
+            )
+        else:
+            memberships_edit = memberships_edit.filter(subempresa__isnull=True)
+
+        puede_editar = memberships_edit.filter(
+            rol__in=[UsuarioEmpresa.Rol.ADMIN, UsuarioEmpresa.Rol.FINANCIERO]
+        ).exists()
+
+    # Fecha de vencimiento siguiente (para formulario futuro)
     def calcular_fecha_vencimiento():
         ultimo = mov.pagos.order_by("-numero_pago").first()
         if ultimo and ultimo.fecha_vencimiento:
@@ -636,21 +977,6 @@ def movimiento_detalle_view(request, pk: int):
 
     fecha_vencimiento_siguiente = calcular_fecha_vencimiento()
 
-    puede_editar = ...
-    form_error_global = ""
-
-    # pagos_qs = mov.pagos.all().order_by("numero_pago")
-    # pagos_realizados = pagos_qs.filter(
-    #     esta_pagado=True,
-    #     fecha_pago__isnull=False,
-    # ).order_by("numero_pago")
-
-    # total_pagado = (
-    #     pagos_qs.filter(esta_pagado=True).aggregate(total=Sum("monto"))["total"] or 0
-    # )
-    # total_pendiente = mov.monto_total - total_pagado
-
-
     ctx = {
         "movimiento": mov,
         "pagos": pagos_qs,
@@ -663,6 +989,11 @@ def movimiento_detalle_view(request, pk: int):
         "label_pagado": label_pagado,
         "label_pendiente": label_pendiente,
         "orden_actual": orden,
+        "fecha_vencimiento_siguiente": fecha_vencimiento_siguiente,
+        "clase_total_pendiente": clase_total_pendiente,
+        "estatus_mov": estatus_mov,
+        "fecha_limite_pago": fecha_limite_pago,
+        "hoy": hoy,
     }
     return render(request, "core/movimiento_detalle.html", ctx)
 

@@ -25,84 +25,112 @@
 <div class="card">
     <h3>Información general</h3>
     <div class="mov-info-grid">
-        <div class="mov-info-item mov-info-main">
-            <span class="mov-info-label">Folio</span>
-            <span class="mov-info-value">{{ movimiento.folio|default:"—" }}</span>
+        {# Fila 1: tipo y estado #}
+        <div class="mov-info-item">
+            <div class="mov-info-label">Tipo de movimiento</div>
+            <div class="mov-info-value">
+                {% if movimiento.tipo == movimiento.TipoMovimiento.ACTIVO %}
+                    Activo
+                {% else %}
+                    Pasivo
+                {% endif %}
+            </div>
         </div>
 
         <div class="mov-info-item">
-            <span class="mov-info-label">Tipo</span>
-            <span class="mov-info-value">{{ movimiento.get_tipo_display }}</span>
+            <div class="mov-info-label">Estatus</div>
+            <div class="mov-info-value">
+                {% if estatus_mov == "Saldado" %}
+                    <span class="estatus-label estatus-label-saldado">{{ estatus_mov }}</span>
+                {% elif estatus_mov == "Atrasado" %}
+                    <span class="estatus-label estatus-label-atrasado">{{ estatus_mov }}</span>
+                {% else %}
+                    {# Con saldo pendiente u otro no pagado #}
+                    <span class="estatus-label estatus-label-pendiente">{{ estatus_mov }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+
+        {# Fila 2: empresa, subempresa, concepto #}
+        <div class="mov-info-item">
+            <div class="mov-info-label">Empresa</div>
+            <div class="mov-info-value">{{ movimiento.empresa.nombre }}</div>
+        </div>
+
+        {% if movimiento.subempresa %}
+        <div class="mov-info-item">
+            <div class="mov-info-label">Sub-empresa</div>
+            <div class="mov-info-value">{{ movimiento.subempresa.nombre }}</div>
+        </div>
+        {% endif %}
+
+        <div class="mov-info-item mov-info-full">
+            <div class="mov-info-label">Concepto</div>
+            <div class="mov-info-value">{{ movimiento.concepto.nombre }}</div>
+        </div>
+
+        <div class="mov-info-item mov-info-full">
+            <div class="mov-info-label">Descripción</div>
+            <div class="mov-info-value">
+                {{ movimiento.descripcion|default:"Sin descripción" }}
+            </div>
+        </div>
+
+
+        {# Fila 3: folio y captura, ocupando menos #}
+        <div class="mov-info-item">
+            <div class="mov-info-label">Folio</div>
+            <div class="mov-info-value">#{{ movimiento.id }}</div>
         </div>
 
         <div class="mov-info-item">
-            <span class="mov-info-label">Estado</span>
-            <span class="mov-info-value">{{ movimiento.get_estado_display }}</span>
+            <div class="mov-info-label">Capturado por</div>
+            <div class="mov-info-value">
+                {{ movimiento.usuario_captura.get_full_name|default:movimiento.usuario_captura.username }}
+            </div>
         </div>
 
+        <div class="mov-info-item">
+            <div class="mov-info-label">Fecha de captura</div>
+            <div class="mov-info-value">{{ movimiento.fecha_registro }}</div>
+        </div>
+
+        <div class="mov-info-item">
+            <div class="mov-info-label">Fecha límite de pago</div>
+            <div class="mov-info-value">
+                {% if fecha_limite_pago %}
+                    {{ fecha_limite_pago }}
+                {% else %}
+                    ---
+                {% endif %}
+            </div>
+        </div>
+
+
+        {# Fila 4: montos #}
         <div class="mov-info-item mov-info-highlight">
-            <span class="mov-info-label">Monto total</span>
-            <span class="mov-info-value">
+            <div class="mov-info-label">Monto total</div>
+            <div class="mov-info-value">
                 ${{ movimiento.monto_total|floatformat:2|intcomma }}
-            </span>
+            </div>
         </div>
 
         <div class="mov-info-item">
-            <span class="mov-info-label">{{ label_pagado }}</span>
-            <span class="mov-info-value">
+            <div class="mov-info-label">{{ label_pagado }}</div>
+            <div class="mov-info-value">
                 ${{ total_pagado|floatformat:2|intcomma }}
-            </span>
+            </div>
         </div>
 
-        <div class="mov-info-item">
-            <span class="mov-info-label">{{ label_pendiente }}</span>
-            <span class="mov-info-value">
+        <div class="mov-info-item {{ clase_total_pendiente }} restante-box">
+            <div class="mov-info-label">{{ label_pendiente }}</div>
+            <div class="mov-info-value">
                 ${{ total_pendiente|floatformat:2|intcomma }}
-            </span>
-        </div>
-
-        <div class="mov-info-item">
-            <span class="mov-info-label">Fecha de registro</span>
-            <span class="mov-info-value">{{ movimiento.fecha_registro }}</span>
-        </div>
-
-        <div class="mov-info-item">
-            <span class="mov-info-label">Fecha de inicio</span>
-            <span class="mov-info-value">{{ movimiento.fecha_inicio }}</span>
-        </div>
-
-        <div class="mov-info-item">
-            <span class="mov-info-label">Núm. de pagos</span>
-            <span class="mov-info-value">{{ movimiento.numero_pagos }}</span>
-        </div>
-
-        <div class="mov-info-item">
-            <span class="mov-info-label">Frecuencia</span>
-            <span class="mov-info-value">{{ movimiento.get_frecuencia_pago_display }}</span>
-        </div>
-
-        <div class="mov-info-item mov-info-full">
-            <span class="mov-info-label">Capturado por</span>
-            <span class="mov-info-value">
-                {% if movimiento.usuario_captura %}
-                    {{ movimiento.usuario_captura.get_username }}
-                {% else %}
-                    —
-                {% endif %}
-            </span>
-        </div>
-
-        <div class="mov-info-item mov-info-full">
-            <span class="mov-info-label">Observaciones</span>
-            <span class="mov-info-value">
-                {% if movimiento.observaciones %}
-                    {{ movimiento.observaciones|linebreaksbr }}
-                {% else %}
-                    <span style="color: var(--color-text-light);">Sin observaciones.</span>
-                {% endif %}
-            </span>
+            </div>
         </div>
     </div>
+
 </div>
 
 
@@ -113,7 +141,7 @@
     {% if puede_editar %}
     <div style="margin-bottom: 20px;">
 
-        {# Pagos realizados en formato compacto #}
+        {# Pagos realizados en formato compacto: SIEMPRE visibles #}
         {% if pagos_realizados %}
             <div class="pagos-realizados-header">
                 <span>Pagos realizados</span>
@@ -133,6 +161,7 @@
                                 ${{ p.monto|floatformat:2|intcomma }}
                             </span>
 
+                            {# Solo el botón de editar depende de puede_editar #}
                             {% if puede_editar %}
                             <a href="{% url 'core:pago_editar' movimiento.id p.id %}"
                             class="pago-chip-edit"
@@ -144,175 +173,115 @@
                     </div>
                 {% endfor %}
             </div>
-
         {% else %}
             <p style="margin-bottom: 10px; color: var(--color-text-light);">
                 Aún no se ha registrado ningún pago relacionado con este movimiento.
             </p>
         {% endif %}
 
-        <!-- {# Formulario para registrar nuevo pago #}
-        <div style="margin-bottom: 20px;">
-            <h4>Registrar nuevo pago</h4>
-
-            {% if form_error_global %}
-                <div class="form-global-error">
-                    {{ form_error_global }}
-                </div>
-            {% endif %}
-
-            <form method="post" class="form pago-form" id="form-pago">
-                {% csrf_token %}
-                {{ pago_form.non_field_errors }}
-
-                <div class="pago-form-grid">
-                    <div class="form-group">
-                        <label>Número de pago</label>
-                        <input type="number"
-                               value="{{ siguiente_numero_pago }}"
-                               readonly
-                               class="input-readonly"
-                               id="numero-pago-display">
-                    </div>
-
-                    <div class="form-group">
-                        {{ pago_form.fecha_vencimiento.label_tag }}
-                        {{ pago_form.fecha_vencimiento }}
-                        {{ pago_form.fecha_vencimiento.errors }}
-                    </div>
-
-                    <div class="pago-monto-wrapper">
-                        <div class="form-group pago-monto-col">
-                            {{ pago_form.monto.label_tag }}
-                            <div class="input-with-prefix">
-                                <span class="input-prefix">$</span>
-                                {{ pago_form.monto }}
-                            </div>
-                            {{ pago_form.monto.errors }}
-                        </div>
-
-                        <div class="form-group pago-monto-col">
-                            <label>Restante</label>
-                            <div id="restante-box"
-                                 data-base-restante="{{ total_pendiente }}"
-                                 data-tipo="{{ movimiento.tipo }}"
-                                 class="restante-box">
-                                ${{ total_pendiente|floatformat:2|intcomma }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        {{ pago_form.fecha_pago.label_tag }}
-                        {{ pago_form.fecha_pago }}
-                        {{ pago_form.fecha_pago.errors }}
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
-                    Guardar pago
-                </button>
-            </form>
-        </div> -->
+        <!-- {# Aquí, si más adelante reactivas el formulario de nuevo pago, 
+        lo envuelves en {% if puede_editar %} ... {% endif %} #}
+        {# {% if puede_editar %} ... formulario ... {% endif %} #} -->
 
     </div>
+
     {% endif %}
 
     {# Tabla de pagos registrados o mensaje si no hay #}
     <div class="table-container">
-        {% if pagos %}
-            <table id="tabla-pagos">
-                <thead>
-                    <tr>
-                        <th>
-                            <a href="#"
-                            class="tabla-sort"
-                            data-field="numero_pago"
-                            data-state="asc">
-                                # Pago
-                                <span class="orden-icon">▲</span>
-                            </a>
-                        </th>
-                        <th>
-                            <a href="#"
-                            class="tabla-sort"
-                            data-field="fecha_vencimiento"
-                            data-state="off">
-                                Fecha de vencimiento
-                                <span class="orden-icon"></span>
-                            </a>
-                        </th>
-                        <th>
-                            <a href="#"
-                            class="tabla-sort"
-                            data-field="monto"
-                            data-state="off">
-                                Monto
-                                <span class="orden-icon"></span>
-                            </a>
-                        </th>
-                        <th>
-                            <a href="#"
-                            class="tabla-sort"
-                            data-field="fecha_pago"
-                            data-state="off">
-                                Fecha de pago
-                                <span class="orden-icon"></span>
-                            </a>
-                        </th>
-                        <th>
-                            <a href="#"
-                            class="tabla-sort"
-                            data-field="esta_pagado"
-                            data-state="off">
-                                Pagado
-                                <span class="orden-icon"></span>
-                            </a>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for pago in pagos %}
-                    <tr>
-                        <td>
-                            {% if puede_editar %}
-                            <a href="{% url 'core:pago_editar' movimiento.id pago.id %}"
-                                class="tabla-pago-edit"
-                                title="Editar pago {{ pago.numero_pago }}">
-                                &#9998;
-                            </a>
-                            {% endif %}
-                            <span>#{{ pago.numero_pago }}</span>
-                        </td>
+    <table id="tabla-pagos">
+        <thead>
+        <tr>
+            <th>
+                <a href="#"
+                   class="tabla-sort"
+                   data-field="numero_pago"
+                   data-state="asc">
+                    # Pago
+                    <span class="orden-icon">▲</span>
+                </a>
+            </th>
+            <th>
+                <a href="#"
+                   class="tabla-sort"
+                   data-field="fecha_vencimiento"
+                   data-state="off">
+                    Fecha de vencimiento
+                    <span class="orden-icon"></span>
+                </a>
+            </th>
+            <th>
+                <a href="#"
+                   class="tabla-sort"
+                   data-field="monto"
+                   data-state="off">
+                    Monto
+                    <span class="orden-icon"></span>
+                </a>
+            </th>
+            <th>
+                <a href="#"
+                   class="tabla-sort"
+                   data-field="fecha_pago"
+                   data-state="off">
+                    Fecha de pago
+                    <span class="orden-icon"></span>
+                </a>
+            </th>
+            <th>
+                <a href="#"
+                   class="tabla-sort"
+                   data-field="esta_pagado"
+                   data-state="off">
+                    Pagado
+                    <span class="orden-icon"></span>
+                </a>
+            </th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for pago in pagos %}
+            <tr
+                data-numero-pago="{{ pago.numero_pago }}"
+                data-fecha-vencimiento="{{ pago.fecha_vencimiento|date:'Y-m-d' }}"
+                data-monto="{{ pago.monto }}"
+                data-esta-pagado="{% if pago.esta_pagado %}1{% else %}0{% endif %}"
+                data-fecha-pago="{% if pago.fecha_pago %}{{ pago.fecha_pago|date:'Y-m-d' }}{% else %}{% endif %}"
+            >
+                <td>
+                    {% if puede_editar %}
+                        <a href="{% url 'core:pago_editar' movimiento.id pago.id %}"
+                        class="tabla-pago-edit"
+                        title="Editar pago {{ pago.numero_pago }}">✎</a>
+                    {% endif %}
+                    <span>#{{ pago.numero_pago }}</span>
+                </td>
+                <td>{{ pago.fecha_vencimiento }}</td>
+                <td>${{ pago.monto|floatformat:2|intcomma }}</td>
+                <td>
+                    {% if pago.fecha_pago %}
+                        {{ pago.fecha_pago }}
+                    {% else %}
+                        ---
+                    {% endif %}
+                </td>
+                <td>
+                    {% if pago.esta_pagado %}
+                        <span class="pago-status pago-status-pagado">Pagado</span>
+                    {% else %}
+                        {% if pago.fecha_vencimiento and pago.fecha_vencimiento < hoy %}
+                            <span class="pago-status pago-status-atrasado">Atrasado</span>
+                        {% else %}
+                            <span class="pago-status pago-status-pendiente">Pendiente</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 
-                        <td>{{ pago.fecha_vencimiento }}</td>
-                        <td>${{ pago.monto|floatformat:2|intcomma }}</td>
-                        <td>
-                            {% if pago.fecha_pago %}
-                                {{ pago.fecha_pago }}
-                            {% else %}
-                                ---
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pago.esta_pagado %}True{% else %}False{% endif %}
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="5" style="text-align:center; color:var(--color-text-light);">
-                            Aún no se ha registrado ningún pago relacionado con este movimiento.
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p style="text-align:center; color:var(--color-text-light); padding: 12px 0;">
-                Aún no se ha registrado ningún pago relacionado con este movimiento.
-            </p>
-        {% endif %}
-    </div>
 </div>
 
 
@@ -421,19 +390,19 @@ document.addEventListener("DOMContentLoaded", function () {
     function getKey(row, field) {
         const ds = row.dataset;
         if (field === "numero_pago") {
-            return parseInt(ds.numeroPago || "0", 10);
+            return parseInt(ds.numeroPago || ds.numero_pago || "0", 10);
         }
         if (field === "monto") {
             return parseFloat(ds.monto || "0");
         }
         if (field === "esta_pagado") {
-            return parseInt(ds.estaPagado || "0", 10); // 0 / 1
+            return parseInt(ds.estaPagado || ds.esta_pagado || "0", 10);
         }
         if (field === "fecha_vencimiento") {
-            return ds.fechaVencimiento || "";
+            return ds.fechaVencimiento || ds.fecha_vencimiento || "";
         }
         if (field === "fecha_pago") {
-            return ds.fechaPago || "";
+            return ds.fechaPago || ds.fecha_pago || "";
         }
         return "";
     }
@@ -450,9 +419,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return va < vb ? 1 : -1;
             }
         });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
+        rows.forEach(row => tbody.appendChild(row));
     }
 
     function updateHeaderStates() {
@@ -477,7 +444,6 @@ document.addEventListener("DOMContentLoaded", function () {
             const field = h.dataset.field;
             let state = h.dataset.state || "off";
 
-            // Ciclo: off -> asc -> desc -> off
             if (state === "off") {
                 state = "asc";
             } else if (state === "asc") {
@@ -486,7 +452,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 state = "off";
             }
 
-            // Apagar otros encabezados
             headers.forEach(function (other) {
                 if (other !== h) {
                     other.dataset.state = "off";
@@ -508,10 +473,10 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Orden inicial: número de pago ascendente
     sortBy(currentField, currentDir);
     updateHeaderStates();
 });
 </script>
+
 
 {% endblock %}

@@ -1,5 +1,4 @@
 /* Paleta de Colores: Blanco (#FFFFFF), Negro (#1F2937), Azul (#1D4ED8), Verde (#10B981) */
-
 :root {
     --color-background: #F9FAFB;
     --color-white: #FFFFFF;
@@ -244,7 +243,7 @@ th {
 }
 
 .tabla-pago-edit {
-    margin-left: 6px;
+    /* margin-left: 6px; */
     font-size: 0.85rem;
     color: var(--color-primary);
     text-decoration: none;
@@ -257,6 +256,66 @@ th {
 .orden-icon {
     font-size: 0.75rem;
     margin-left: 4px;
+}
+
+#tabla-pagos tbody tr {
+    transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.05s ease;
+}
+
+#tabla-pagos tbody tr:hover {
+    background-color: #EFF6FF;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+.pago-status {
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.pago-status-pendiente {
+    color: var(--color-warning-yellow); /* tono de alerta */
+}
+
+.pago-status-pagado {
+    color: var(--color-primary-blue);   /* azul */
+}
+
+.pago-status-atrasado {
+    color: var(--color-danger-red);     /* rojo */
+}
+
+.mov-pendiente-alerta {
+    background-color: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.8);
+    color: #92400E;
+}
+
+.mov-pendiente-verde {
+    background-color: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.8);
+    color: #065F46;
+}
+
+.mov-pendiente-azul {
+    background-color: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.8);
+    color: var(--color-primary-blue);
+}
+
+.estatus-label {
+    font-weight: 700;
+}
+
+.estatus-label-pendiente {
+    color: var(--color-warning-yellow); /* amarillo para estados no pagados (pendiente) */
+}
+
+.estatus-label-saldado {
+    color: var(--color-accent-green); /* verde para saldado */
+}
+
+.estatus-label-atrasado {
+    color: var(--color-danger-red);     /* rojo para atrasado */
 }
 
 /* --- Layout del Flujo de Aprobación --- */
@@ -351,8 +410,8 @@ th {
 }
 
 .modal-dialog {
-    background: var(--color-bg-card);
-    color: var(--color-text-main);
+    background: var(--color-surface);
+    color: var(--color-text-dark);
     border-radius: 8px;
     padding: 20px 22px;
     max-width: 420px;
@@ -586,14 +645,123 @@ th {
     color: var(--color-primary-dark);
 }
 
+/* Hover de filas en tablas de movimientos (como en tabla de pagos) */
+#tabla-movimientos tbody tr,
+#tabla-mov-futuro tbody tr {
+    transition: background-color 0.12s ease,
+                box-shadow 0.12s ease,
+                transform 0.05s ease;
+}
+
+#tabla-movimientos tbody tr:hover,
+#tabla-mov-futuro tbody tr:hover {
+    background-color: #EFF6FF;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+/* Botón icónico para limpiar filtros de fecha */
+.btn-icon-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-light);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0;
+    margin-left: 4px;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.1s ease,
+        box-shadow 0.15s ease;
+}
+
+.btn-icon-clear:hover {
+    background-color: #F3F4F6;
+    border-color: var(--color-border);
+    color: var(--color-danger-red);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+}
+
+/* Botones compactos para filtros de fecha */
+.btn-filter-date,
+.btn-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 999px;
+    border-width: 1px;
+    border-style: solid;
+    cursor: pointer;
+}
+
+.btn-filter-date {
+    background-color: var(--color-primary-blue);
+    color: #ffffff;
+    border-color: var(--color-primary-blue);
+}
+
+.btn-filter-date:hover {
+    background-color: #1E40AF;
+    border-color: #1E40AF;
+}
+
+.btn-filter-clear {
+    background-color: transparent;
+    color: var(--color-text-light);
+    border-color: var(--color-border);
+}
+
+.btn-filter-clear:hover {
+    background-color: #F3F4F6;
+    color: var(--color-danger-red);
+    border-color: var(--color-danger-red);
+}
+
+.btn-filter-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+/* Chips pequeños para las fechas de pago futuras */
+.fechas-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+
+.fecha-chip {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background-color: #F3F4F6;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-light);
+}
+
+.fecha-chip-empty {
+    opacity: 0.7;
+    font-style: italic;
+}
+
 /* Iconos de edición (chips y tabla) como botoncitos redondos */
 .pago-chip-edit,
 .tabla-pago-edit {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 2rem;
+    height: 2rem;
     border-radius: 999px;
     border: 1px solid transparent;
     font-size: 0.8rem;
@@ -614,6 +782,207 @@ th {
     color: var(--color-primary-blue);
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
+}
+
+/* Inputs de fecha con animación en hover */
+.input-date-filter {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    font-size: 0.85rem;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.1s ease,
+        background-color 0.15s ease;
+}
+
+.input-date-filter:hover {
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+    background-color: #F9FAFF;
+    transform: translateY(-1px);
+}
+
+/* Botones compactos para filtros de fecha (ya existentes, se mejoran animaciones) */
+.btn-filter-date,
+.btn-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 999px;
+    border-width: 1px;
+    border-style: solid;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.1s ease;
+}
+
+.btn-filter-date {
+    background-color: var(--color-primary-blue);
+    color: #ffffff;
+    border-color: var(--color-primary-blue);
+}
+
+.btn-filter-date:hover {
+    background-color: #1E40AF;
+    border-color: #1E40AF;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-filter-clear {
+    background-color: transparent;
+    color: var(--color-text-light);
+    border-color: var(--color-border);
+}
+
+.btn-filter-clear:hover {
+    background-color: #F3F4F6;
+    color: var(--color-danger-red);
+    border-color: var(--color-danger-red);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-filter-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+/* Columna de fechas de pago con ancho controlado */
+.col-fechas-pago {
+    width: 220px;
+    max-width: 230px;
+}
+
+/* Grupo y chips de fechas de pago */
+.fechas-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+
+.fecha-chip {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background-color: #F3F4F6;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-light);
+    white-space: nowrap;
+}
+
+.fecha-chip-empty {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+/* Chip "ver más" con la misma animación que el botón de editar pago */
+.fecha-chip-ver-mas {
+    cursor: pointer;
+    border-color: var(--color-primary-blue);
+    color: var(--color-primary-blue);
+    background-color: #EFF6FF;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease,
+        transform 0.1s ease,
+        box-shadow 0.15s ease,
+        border-color 0.15s ease;
+    font-size: 0.75rem;
+}
+
+/* Mismo efecto hover que .pago-chip-edit/.tabla-pago-edit */
+.pago-chip-edit,
+.tabla-pago-edit,
+.fecha-chip-ver-mas {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+
+.pago-chip-edit:hover,
+.tabla-pago-edit:hover,
+.fecha-chip-ver-mas:hover {
+    background-color: #EFF6FF;
+    border-color: var(--color-primary-blue);
+    color: var(--color-primary-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
+}
+
+/* Contenedor de fechas extra (se muestra al hacer click en "ver más") */
+.fechas-chip-extra {
+    margin-top: 4px;
+}
+
+/* Barra compacta para el contexto de captura */
+.captura-context-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+}
+
+.captura-context-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    font-size: 0.7rem;
+    color: var(--color-text-light);
+}
+
+.captura-context-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #EFF6FF;
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    color: var(--color-primary-blue);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+/* Ajustes específicos de la grilla de métricas en captura */
+.metric-grid-captura {
+    margin-top: 4px;
+}
+
+/* Hacer que la tarjeta principal de resumen ocupe más espacio en desktop */
+.metric-grid-captura .card-kpi-principal {
+    grid-column: span 2;
+}
+
+@media (max-width: 900px) {
+    .metric-grid-captura .card-kpi-principal {
+        grid-column: span 1;
+    }
+}
+
+/* Acciones en tablas de movimientos */
+.tabla-mov-view {
+    /* se queda con el azul por defecto de .tabla-pago-edit */
+}
+
+.tabla-mov-delete {
+    color: var(--color-danger-red);
+}
+
+.tabla-mov-delete:hover {
+    background-color: rgba(239, 68, 68, 0.06);
+    border-color: var(--color-danger-red);
+    color: var(--color-danger-red);
 }
 
 /* Encabezados de la tabla de pagos */

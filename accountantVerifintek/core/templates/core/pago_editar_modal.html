@@ -35,14 +35,33 @@
         {% csrf_token %}
         {{ form.non_field_errors }}
 
-        <div class="form-group">
-            {{ form.monto.label_tag }}
-            <div class="input-with-prefix">
-                <span class="input-prefix">$</span>
-                {{ form.monto }}
+        <div class="pago-monto-wrapper">
+            <div class="pago-monto-col">
+                <div class="form-group">
+                    {{ form.monto.label_tag }}
+                    <div class="input-with-prefix">
+                        <span class="input-prefix">$</span>
+                        {{ form.monto }}
+                    </div>
+                </div>
             </div>
-            {{ form.monto.errors }}
+
+            <div class="pago-monto-col">
+                <div class="form-group">
+                    <label class="mov-info-label">{{ label_pendiente }}</label>
+                    <div id="restante-box-mov"
+                        class="restante-box {{ clase_total_pendiente }}"
+                        data-base-pendiente="{{ base_pendiente }}"
+                        data-activo="{% if movimiento.tipo == movimiento.TipoMovimiento.ACTIVO %}1{% else %}0{% endif %}">
+                        <span id="restante-valor-mov" class="mov-info-value">
+                            ${{ base_pendiente|floatformat:2|intcomma }}
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
+
+
 
         <div class="form-group">
             {{ form.fecha_pago.label_tag }}
@@ -129,5 +148,76 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 </script>
+
+<!-- JS para modificar la cantidad y el color de "Cantidad a pagar" dinámicamente -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const inputMonto = document.getElementById("id_monto");
+    const box = document.getElementById("restante-box-mov");
+    const valorSpan = document.getElementById("restante-valor-mov");
+
+    if (!inputMonto || !box || !valorSpan) return;
+
+    const basePendiente = parseFloat(box.dataset.basePendiente || "0");
+    const esActivo = box.dataset.activo === "1";
+
+    function formatMoney(n) {
+        if (!isFinite(n)) n = 0;
+        const sign = n < 0 ? "-" : "";
+        n = Math.abs(n);
+        const s = n.toFixed(2);
+        const parts = s.split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return sign + "$" + parts.join(".");
+    }
+
+    function actualizarRestante() {
+        let valor = inputMonto.value.replace(/,/g, "").trim();
+        let monto = parseFloat(valor);
+        if (isNaN(monto)) {
+            monto = 0;
+        }
+
+        let restante = basePendiente - monto;
+
+        // Actualizar texto
+        valorSpan.textContent = formatMoney(restante);
+
+        // Si el movimiento es ACTIVO, solo actualizamos cantidad, mantenemos azul
+        if (esActivo) {
+            return;
+        }
+
+        // Quitar clases de color previas
+        box.classList.remove(
+            "mov-pendiente-alerta",
+            "mov-pendiente-verde",
+            "mov-pendiente-azul"
+        );
+
+        // Evitar errores por flotantes
+        const eps = 0.005;
+        if (restante > eps) {
+            // Aún debemos dinero
+            box.classList.add("mov-pendiente-alerta");
+        } else if (Math.abs(restante) <= eps) {
+            // Deuda saldada
+            box.classList.add("mov-pendiente-verde");
+        } else {
+            // Pagado de más: nos deben
+            box.classList.add("mov-pendiente-azul");
+        }
+    }
+
+    // Estado inicial
+    actualizarRestante();
+
+    // Recalcular al escribir en Monto
+    inputMonto.addEventListener("input", actualizarRestante);
+    inputMonto.addEventListener("change", actualizarRestante);
+});
+</script>
+
+
 
 {% endblock %}
