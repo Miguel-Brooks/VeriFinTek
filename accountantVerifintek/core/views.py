@@ -13,8 +13,16 @@ from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
 import csv
 from io import BytesIO
+from django.contrib.auth.models import User
+from django.utils.crypto import get_random_string
+from .forms import EmpresaForm, InvitacionUsuarioForm, UsuarioEmpresaForm, SubempresaForm
+from django.db import transaction
 
-
+# --- Función auxiliar para validar si es administrador del sistema ---
+def es_admin_sistema(user):
+    # Asumimos que el admin del sistema es superuser o staff. 
+    # Ajusta esta lógica si usas un grupo o permiso específico.
+    return user.is_authenticated and (user.is_superuser or user.is_staff)
 
 def _generar_pagos_iniciales(mov: Movimiento):
     """
@@ -623,6 +631,27 @@ def captura_view(request):
     hoy = date.today()
 
     # ----------------------------
+    # Lógica nueva: Prellenado desde URL (para neutralizar)
+    # ----------------------------
+    initial_data = {}
+    
+    # Mapear parámetros de URL a campos del formulario SI existen en el GET
+    if request.GET.get("monto_total"):
+        initial_data["monto_total"] = request.GET.get("monto_total")
+    if request.GET.get("tipo"):
+        initial_data["tipo"] = request.GET.get("tipo")
+    if request.GET.get("concepto_nombre"):
+        initial_data["concepto_nombre"] = request.GET.get("concepto_nombre")
+    if request.GET.get("folio"):
+        initial_data["folio"] = request.GET.get("folio")
+    if request.GET.get("frecuencia_pago"):
+        initial_data["frecuencia_pago"] = request.GET.get("frecuencia_pago")
+    if request.GET.get("numero_pagos"):
+        initial_data["numero_pagos"] = request.GET.get("numero_pagos")
+    if request.GET.get("fecha_inicio"):
+        initial_data["fecha_inicio"] = request.GET.get("fecha_inicio")
+
+    # ----------------------------
     # 1) Filtro de fechas: MOVIMIENTOS RECIENTES
     # ----------------------------
     fecha_desde_str = request.GET.get("mov_desde")
@@ -712,7 +741,8 @@ def captura_view(request):
             messages.success(request, "Movimiento registrado correctamente.")
             return redirect("core:captura")
     else:
-        form = MovimientoForm()
+        # CORRECCIÓN AQUÍ: Usar initial_data si estamos en GET
+        form = MovimientoForm(initial=initial_data)
 
     if request.GET.get("open_modal") == "1":
         abrir_modal_mov = True
@@ -839,6 +869,7 @@ def captura_view(request):
     ctx.update({
         "puede_capturar": True,
         "form": form,
+        "abrir_modal_mov": abrir_modal_mov,
         "movimientos": qs,
         "total_activos": total_activos,
         "total_pasivos": total_pasivos,
@@ -2005,3 +2036,346 @@ def movimiento_eliminar_view(request, pk: int):
 
     # Si llega por GET, redirigimos sin borrar
     return redirect("core:captura")
+
+@login_required(login_url="core:login")
+def neutralizar_movimiento_view(request, pk):
+    """
+    Redirige a la vista de captura con los datos necesarios para crear un
+    contra-movimiento que neutralice el movimiento con ID `pk`.
+    """
+    mov_original = get_object_or_404(Movimiento, pk=pk)
+
+    # Permisos: superuser puede todo; demás necesitan permiso de escritura
+    if not request.user.is_superuser:
+        memberships = UsuarioEmpresa.objects.filter(
+            usuario=request.user,
+            empresa=mov_original.empresa,
+            puede_escribir=True,
+        )
+
+        if mov_original.subempresa:
+            memberships = memberships.filter(
+                Q(subempresa__isnull=True) | Q(subempresa=mov_original.subempresa)
+            )
+        else:
+            memberships = memberships.filter(subempresa__isnull=True)
+
+        puede_editar = memberships.filter(
+            rol__in=[UsuarioEmpresa.Rol.ADMIN, UsuarioEmpresa.Rol.FINANCIERO]
+        ).exists()
+
+        if not puede_editar:
+            messages.error(
+                request,
+                "No tienes permiso para neutralizar este movimiento.",
+            )
+            return redirect("core:movimiento_detalle", pk=mov_original.pk)
+
+    # Determinar tipo contrario
+    if mov_original.tipo == Movimiento.TipoMovimiento.ACTIVO:
+        nuevo_tipo = Movimiento.TipoMovimiento.PASIVO
+        sufijo = "(Devolución/Cancelación)"
+    else:
+        nuevo_tipo = Movimiento.TipoMovimiento.ACTIVO
+        sufijo = "(Reembolso/Ajuste)"
+
+    # Construir parámetros para prellenar el formulario en captura_view
+    params = {
+        "open_modal": "1",
+        "neutralizar_id": mov_original.id,  # referencia opcional
+        "tipo": nuevo_tipo,
+        "monto_total": mov_original.monto_total,
+        "concepto_nombre": f"{mov_original.concepto.nombre} {sufijo}",
+        "fecha_inicio": date.today().isoformat(),
+        "frecuencia_pago": mov_original.frecuencia_pago,
+        "numero_pagos": mov_original.numero_pagos,
+        "folio": f"REF-{mov_original.folio}" if mov_original.folio else "",
+    }
+
+    from urllib.parse import urlencode
+    query_string = urlencode(params)
+
+    return redirect(f"{reverse('core:captura')}?{query_string}")
+
+# ==========================================
+# SECCIÓN DE ADMINISTRACIÓN / CONFIGURACIÓN
+# ==========================================
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.models import User
+
+# ...
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+def configuracion_view(request):
+    """
+    Vista maestra 'Torre de Control'.
+    Carga la estructura jerárquica y la matriz de usuarios/accesos.
+    """
+
+    # Empresas con sus sub-empresas
+    empresas = (
+        Empresa.objects
+        .prefetch_related("subempresas")
+        .all()
+        .order_by("nombre")
+    )
+
+    # Todos los accesos configurados (Listado de Accesos)
+    permisos_qs = (
+        UsuarioEmpresa.objects
+        .select_related("usuario", "empresa", "subempresa")
+        .order_by("usuario__first_name", "usuario__last_name", "empresa__nombre")
+    )
+
+    # Todos los usuarios del sistema (para CRUD de usuarios)
+    users_all = User.objects.all().order_by("first_name", "last_name", "email")
+
+    context = {
+        # Estructura empresarial
+        "empresas": empresas,
+
+        # Matriz de accesos
+        "permisos": permisos_qs,             # por compatibilidad
+        "permisos_asignados": permisos_qs,   # nombre que usa la tabla de Listado de Accesos
+
+        # CRUD de usuarios
+        "users_all": users_all,
+
+        # Formularios para los modales globales
+        "form_empresa": EmpresaForm(),
+        "form_invitacion": InvitacionUsuarioForm(),
+        "form_permiso": UsuarioEmpresaForm(),
+    }
+
+    return render(request, "core/configuracion.html", context)
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+@transaction.atomic
+def editar_usuario_view(request, pk):
+    """
+    Edita datos básicos de un usuario (nombre, apellidos, email y activo).
+    Pensado para usarse desde un modal en configuracion.html.
+    """
+    user = get_object_or_404(User, pk=pk)
+
+    if request.method == "POST":
+        first_name = request.POST.get("first_name", "").strip()
+        last_name = request.POST.get("last_name", "").strip()
+        email = request.POST.get("email", "").strip()
+        is_active = bool(request.POST.get("is_active"))
+
+        # Validar email único para otros usuarios
+        if email and User.objects.exclude(pk=user.pk).filter(email=email).exists():
+            messages.error(
+                request,
+                "Ya existe otro usuario con ese correo electrónico."
+            )
+            return redirect("core:configuracion")
+
+        # Si en tu sistema el username es el email (como en invitar_usuario_view)
+        if email:
+            user.username = email
+            user.email = email
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.is_active = is_active
+        user.save()
+
+        messages.success(request, "Usuario actualizado correctamente.")
+        return redirect("core:configuracion")
+
+    # Si llega por GET, simplemente regresa a configuración
+    return redirect("core:configuracion")
+
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+@transaction.atomic
+def eliminar_usuario_view(request, pk):
+    """
+    Elimina un usuario del sistema.
+    No permite que un administrador se elimine a sí mismo.
+    """
+    user = get_object_or_404(User, pk=pk)
+
+    # Evitar que un admin se borre a sí mismo desde esta pantalla
+    if request.user == user:
+        messages.error(
+            request,
+            "No puedes eliminar tu propio usuario desde esta pantalla."
+        )
+        return redirect("core:configuracion")
+
+    # Opcional: podrías validar que no sea superuser si quieres protegerlo.
+    # if user.is_superuser:
+    #     messages.error(request, "No puedes eliminar un superusuario desde aquí.")
+    #     return redirect("core:configuracion")
+
+    user.delete()
+    messages.success(request, "Usuario eliminado correctamente.")
+    return redirect("core:configuracion")
+
+
+@login_required
+@user_passes_test(es_admin_sistema)
+def crear_empresa_view(request):
+    if request.method == 'POST':
+        form = EmpresaForm(request.POST)
+        if form.is_valid():
+            empresa = form.save()
+            messages.success(request, f"Empresa '{empresa.nombre}' creada exitosamente.")
+        else:
+            # Mostrar errores del formulario si la validación falla
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"Error al crear empresa: {error}")
+    return redirect('core:configuracion')
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+def invitar_usuario_view(request):
+    if request.method == "POST":
+        form = InvitacionUsuarioForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            first_name = form.cleaned_data["firstname"]
+            last_name = form.cleaned_data["lastname"]
+
+            # Verificar si el usuario ya existe por email o username
+            if User.objects.filter(email=email).exists() or User.objects.filter(username=email).exists():
+                messages.warning(
+                    request,
+                    f"El usuario con email {email} ya existe en el sistema."
+                )
+            else:
+                try:
+                    # Crear usuario con contraseña temporal
+                    temp_password = get_random_string(length=12)
+                    user = User.objects.create_user(
+                        username=email,
+                        email=email,
+                        password=temp_password,
+                        first_name=first_name,
+                        last_name=last_name,
+                    )
+                    user.save()
+
+                    # En un entorno real se enviaría un correo; aquí se muestra en pantalla
+                    messages.success(
+                        request,
+                        f"Usuario creado: {email}. "
+                        f"Contraseña temporal: {temp_password} (cópiala, no se volverá a mostrar)."
+                    )
+                except Exception as e:
+                    messages.error(request, f"Error al crear usuario: {str(e)}")
+        else:
+            # Errores generales del formulario
+            for error in form.non_field_errors():
+                messages.error(request, error)
+
+    # Siempre regresamos a la vista de Configuración
+    return redirect("core:configuracion")
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+def asignar_permiso_view(request):
+    if request.method == "POST":
+        form = UsuarioEmpresaForm(request.POST)
+        if form.is_valid():
+            usuario = form.cleaned_data["usuario"]
+            empresa = form.cleaned_data["empresa"]
+            rol = form.cleaned_data["rol"]
+
+            # Verificar si ya existe el permiso para evitar duplicados
+            if UsuarioEmpresa.objects.filter(usuario=usuario, empresa=empresa).exists():
+                messages.warning(
+                    request,
+                    f"El usuario {usuario} ya tiene acceso a {empresa}."
+                )
+            else:
+                form.save()
+                messages.success(
+                    request,
+                    f"Permiso asignado: {usuario} ahora es {rol} en {empresa}."
+                )
+        else:
+            messages.error(
+                request,
+                "Error al asignar permiso. Verifique los datos."
+            )
+
+    return redirect("core:configuracion")
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+def eliminar_permiso_view(request, pk):
+    permiso = get_object_or_404(UsuarioEmpresa, pk=pk)
+    usuario_nombre = permiso.usuario.username
+    empresa_nombre = permiso.empresa.nombre
+    permiso.delete()
+        # Al regresar a Configuración verás la fila removida del Listado
+    messages.success(
+        request,
+        f"Acceso revocado para {usuario_nombre} en {empresa_nombre}."
+    )
+    return redirect("core:configuracion")
+
+
+@login_required(login_url="core:login")
+@user_passes_test(es_admin_sistema)
+def editar_permiso_view(request, pk):
+    permiso = get_object_or_404(UsuarioEmpresa, pk=pk)
+    if request.method == "POST":
+        form = UsuarioEmpresaForm(request.POST, instance=permiso)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Permisos actualizados.")
+        else:
+            messages.error(request, "Error al actualizar permisos.")
+    # Siempre volvemos a Configuración (el modal se cierra al recargar)
+    return redirect("core:configuracion")
+
+@login_required
+@user_passes_test(es_admin_sistema)
+def editar_empresa_view(request, pk):
+    empresa = get_object_or_404(Empresa, pk=pk)
+    if request.method == 'POST':
+        form = EmpresaForm(request.POST, instance=empresa)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Empresa '{empresa.nombre}' actualizada.")
+        else:
+            messages.error(request, "Error al actualizar empresa.")
+    return redirect('core:configuracion')
+
+@login_required
+@user_passes_test(es_admin_sistema)
+def crear_subempresa_view(request, empresa_id):
+    empresa = get_object_or_404(Empresa, pk=empresa_id)
+    if request.method == 'POST':
+        form = SubempresaForm(request.POST)
+        if form.is_valid():
+            sub = form.save(commit=False)
+            sub.empresa = empresa
+            sub.save()
+            messages.success(request, f"Sub-empresa '{sub.nombre}' agregada a {empresa.nombre}.")
+        else:
+            messages.error(request, "Error al crear sub-empresa. Verifique los datos.")
+    return redirect('core:configuracion')
+
+@login_required
+@user_passes_test(es_admin_sistema)
+def editar_subempresa_view(request, pk):
+    sub = get_object_or_404(Subempresa, pk=pk)
+    if request.method == 'POST':
+        form = SubempresaForm(request.POST, instance=sub)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Sub-empresa '{sub.nombre}' actualizada.")
+        else:
+            messages.error(request, "Error al actualizar sub-empresa.")
+    return redirect('core:configuracion')

@@ -587,9 +587,11 @@
                             data-fecha-registro="{{ mov.fecha_registro|date:'Y-m-d' }}"
                             data-folio="{{ mov.folio }}"
                             data-tipo="{{ mov.tipo }}"
-                            data-concepto="{{ mov.concepto.nombre|lower }}"
+                            data-concepto="{{ mov.concepto.nombre }}"
                             {% if not subempresa_actual %}
-                                data-subempresa="{% if mov.subempresa %}{{ mov.subempresa.nombre|lower }}{% else %}{% endif %}"
+                                {# Agregamos el ID para poder seleccionarlo en el select del modal #}
+                                data-subempresa-id="{{ mov.subempresa.id|default:'' }}"
+                                data-subempresa="{{ mov.subempresa.nombre }}"
                             {% endif %}
                             data-monto-total="{{ mov.monto_total }}"
                             data-estado="{{ mov.estatus_label|lower }}"
@@ -604,19 +606,32 @@
                                     ⌕
                                 </a>
 
-                                {# aquí reaprovecha tu botón actual de borrar, solo cambiando icono y clases #}
+                                <!-- {# Botón modificado: Neutralizar en lugar de Borrar #}
                                 <button type="button"
-                                        class="tabla-pago-edit tabla-mov-delete"
-                                        title="Borrar movimiento"
+                                        class="tabla-pago-edit btn-neutralizar"
+                                        title="Neutralizar movimiento (crear contrapartida)"
                                         data-mov-id="{{ mov.id }}">
-                                    ✕
-                                </button>
+                                    ↹
+                                </button> -->
+                                <!-- Reemplaza el botón/form de neutralizar anterior con esto -->
+                                <a href="javascript:void(0);" 
+                                onclick="abrirModalNeutralizar('{% url 'core:neutralizar_movimiento' mov.id %}')"
+                                class="btn-icon-accion" 
+                                title="Neutralizar movimiento (crear contra-movimiento)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </a>
+
+
+
                             </td>
 
                             <td>{{ mov.fecha_registro|date:"d/m/Y" }}</td>
                             <td>{{ mov.folio }}</td>
                             <td>{{ mov.get_tipo_display }}</td>
                             <td>{{ mov.concepto.nombre }}</td>
+
                             {% if not subempresa_actual %}
                                 <td>
                                     {% if mov.subempresa %}
@@ -626,16 +641,20 @@
                                     {% endif %}
                                 </td>
                             {% endif %}
+
                             <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
+                            
                             <td>
-                                <span class="estatus-label {{ mov.estatus_css }}">
+                                <span class="estatus-pill {{ mov.estatus_css }}">
                                     {{ mov.estatus_label }}
                                 </span>
                             </td>
+
                             <td>{{ mov.fecha_inicio|date:"d/m/Y" }}</td>
                             <td>{{ mov.get_frecuencia_pago_display }}</td>
                             <td>{{ mov.numero_pagos }}</td>
                         </tr>
+
                     {% empty %}
                         <tr>
                             <td colspan="11">
@@ -670,6 +689,25 @@
         </form>
     </div>
 </div>
+
+<!-- Modal para confirmar Neutralización -->
+<div id="modal-neutralizar-mov" class="modal-overlay">
+    <div class="modal-dialog">
+        <h3>Neutralizar movimiento</h3>
+        <p style="margin-top: 10px;">
+            ¿Deseas crear un movimiento contrario para neutralizar este registro?
+        </p>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModalNeutralizar()">
+                Cancelar
+            </button>
+            <a href="#" id="btn-confirmar-neutralizar" class="btn btn-primary">
+                Sí, neutralizar
+            </a>
+        </div>
+    </div>
+</div>
+
 
 <!-- Modal de registro de un movimiento -->
 <div id="modal-nuevo-mov" class="modal-overlay {% if abrir_modal_mov %}is-open{% endif %}">
@@ -1098,6 +1136,113 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.textContent = isHidden ? 'ver menos' : 'ver más';
     });
 });
+</script>
+
+<!-- JS para crear movimientos que neutralizan a otros para evitar el borrado de los mismos -->
+ <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnsNeutralizar = document.querySelectorAll('.btn-neutralizar');
+    // Identificar el modal y el formulario de alta (ajusta el selector si tu modal tiene otro ID)
+    // Normalmente en tu proyecto parece que el modal se abre via parámetro URL o botón, 
+    // aquí asumimos que existe un contenedor con el form.
+    const formMovimiento = document.querySelector('form[enctype="multipart/form-data"]') || document.querySelector('form'); 
+    const modalContainer = document.getElementById('modal-movimiento-container') || document.querySelector('.modal-wrapper') || document.getElementById('default-modal'); 
+    // Nota: Si usas un botón específico para abrir el modal, puedes simular click en él:
+    const btnAbrirModalOriginal = document.getElementById('btn-nuevo-movimiento');
+
+    btnsNeutralizar.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // 1. Obtener datos de la fila
+            const row = this.closest('tr');
+            const tipoOriginal = row.dataset.tipo; // "ACTIVO" o "PASIVO"
+            const conceptoOriginal = row.dataset.concepto;
+            const montoOriginal = row.dataset.montoTotal;
+            const subempresaId = row.dataset.subempresaId;
+
+            // 2. Calcular contrapartida (Neutralización)
+            const tipoNuevo = (tipoOriginal === 'ACTIVO') ? 'PASIVO' : 'ACTIVO';
+            const conceptoNuevo = `Neutralización de: ${conceptoOriginal}`;
+            
+            // 3. Abrir el modal
+            if (btnAbrirModalOriginal) {
+                btnAbrirModalOriginal.click();
+            } else if (modalContainer) {
+                // Si controlas la visibilidad con clase hidden (Tailwind/Bootstrap)
+                modalContainer.classList.remove('hidden');
+                modalContainer.style.display = 'flex'; 
+            }
+
+            // 4. Poblar el formulario con un pequeño delay para asegurar que el modal esté listo
+            setTimeout(() => {
+                if (!formMovimiento) return;
+
+                // Tipo: Invertido
+                const selectTipo = formMovimiento.querySelector('select[name="tipo"]');
+                if (selectTipo) selectTipo.value = tipoNuevo;
+
+                // Concepto: Sugerencia de neutralización
+                const inputConcepto = formMovimiento.querySelector('input[name="concepto_nombre"]');
+                if (inputConcepto) inputConcepto.value = conceptoNuevo;
+
+                // Monto: El mismo
+                const inputMonto = formMovimiento.querySelector('input[name="monto_total"]');
+                if (inputMonto) inputMonto.value = montoOriginal;
+
+                // Subempresa: La misma (si el campo existe en el form)
+                if (subempresaId) {
+                    const selectSub = formMovimiento.querySelector('select[name="subempresa"]');
+                    if (selectSub) selectSub.value = subempresaId;
+                }
+
+                // Frecuencia: Único (generalmente una corrección es un pago único inmediato)
+                const selectFrec = formMovimiento.querySelector('select[name="frecuencia_pago"]');
+                if (selectFrec) selectFrec.value = 'UNICO';
+
+                // Número de pagos: 1
+                const inputPagos = formMovimiento.querySelector('input[name="numero_pagos"]');
+                if (inputPagos) inputPagos.value = 1;
+
+                // Fecha inicio: Hoy (para que aplique inmediato)
+                const inputFecha = formMovimiento.querySelector('input[name="fecha_inicio"]');
+                if (inputFecha) {
+                    const hoy = new Date().toISOString().split('T')[0];
+                    inputFecha.value = hoy;
+                }
+                
+                // Opcional: Cambiar el título del modal visualmente para dar contexto
+                const modalTitle = modalContainer ? modalContainer.querySelector('h3, .modal-title') : null;
+                if(modalTitle) modalTitle.textContent = "Registrar Movimiento Neutralizador";
+
+            }, 100);
+        });
+    });
+});
+</script>
+
+<!-- JS para el modal de crear movimiento para cancelar otro -->
+<script>
+    // ... otros scripts ...
+
+    // Funciones para el Modal de Neutralizar
+    function abrirModalNeutralizar(urlDestino) {
+        const modal = document.getElementById('modal-neutralizar-mov');
+        const btnConfirmar = document.getElementById('btn-confirmar-neutralizar');
+        
+        if (modal && btnConfirmar) {
+            // Asignamos la URL de Django al botón "Sí, neutralizar"
+            btnConfirmar.href = urlDestino;
+            modal.classList.add('is-open');
+        }
+    }
+
+    function cerrarModalNeutralizar() {
+        const modal = document.getElementById('modal-neutralizar-mov');
+        if (modal) {
+            modal.classList.remove('is-open');
+        }
+    }
 </script>
 
 <!-- JS para el llenado tipo calculadora y auto formateado -->

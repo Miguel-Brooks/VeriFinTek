@@ -409,15 +409,17 @@ th {
     display: flex;
 }
 
+ /* Cuadro interno de todos los modales tipo overlay (captura + configuración) */
 .modal-dialog {
     background: var(--color-surface);
     color: var(--color-text-dark);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 20px 22px;
-    max-width: 420px;
+    max-width: 520px;   /* tamaño unificado */
     width: 90%;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
 }
+
 
 .modal-actions {
     display: flex;
@@ -1151,6 +1153,452 @@ th .tabla-sort:hover {
   opacity: 0.6;
   pointer-events: none;
   transition: opacity 0.15s ease;
+}
+
+/* --- Modales de configuración estructura/usuarios --- */
+/* Dejamos que Bootstrap controle el overlay a pantalla completa
+   y solo afinamos el contenido para que sea compacto y claro. */
+
+.container-fluid.py-4 .modal .modal-dialog {
+    max-width: 520px;
+    width: 90%;
+    margin: 1.75rem auto;
+}
+
+.container-fluid.py-4 .modal .modal-content {
+    background: var(--color-surface);
+    color: var(--color-text-dark);
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+.container-fluid.py-4 .modal .modal-header,
+.container-fluid.py-4 .modal .modal-footer {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #F9FAFB;
+}
+
+.container-fluid.py-4 .modal .modal-header {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.container-fluid.py-4 .modal .modal-footer {
+    border-top: 1px solid var(--color-border);
+    justify-content: flex-end;
+}
+
+.container-fluid.py-4 .modal .modal-body {
+    padding: 16px;
+}
+
+.container-fluid.py-4 .modal .btn-close {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--color-text-light);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    transition: background-color 0.15s ease, color 0.15s ease,
+                transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.container-fluid.py-4 .modal .btn-close:hover {
+    background-color: #EFF6FF;
+    color: var(--color-primary-blue);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+    transform: translateY(-1px);
+}
+
+/* --- Iconos reutilizables (monocromáticos y pequeños) --- */
+
+/* Contenedor genérico de iconos a la izquierda del texto */
+.icon-left {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 6px;
+    font-size: 0.9rem;      /* pequeño */
+    color: currentColor;    /* mismo color que el texto/botón */
+}
+
+/* Iconos en títulos de modales */
+.modal-title-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 6px;
+    font-size: 1rem;
+    color: var(--color-primary-blue);
+}
+
+/* Animación suave al pasar el mouse por un botón que contenga el icono */
+.btn .icon-anim,
+.btn-small .icon-anim {
+    transition: transform 0.18s ease, color 0.18s ease;
+}
+
+/* Pequeño “rebote” hacia arriba en hover */
+.btn:hover .icon-anim,
+.btn-small:hover .icon-anim {
+    transform: translateY(-1px) scale(1.03);
+}
+
+/* Variante de giro ligero (para botones de acción más notoria) */
+.btn:hover .icon-spin,
+.btn-small:hover .icon-spin {
+    transform: rotate(8deg) scale(1.03);
+}
+
+/* Asegurar un solo color en todos los iconos de configuración */
+.container-fluid.py-4 .bi,
+.container-fluid.py-4 .fas,
+.container-fluid.py-4 .far,
+.container-fluid.py-4 .fal {
+    color: var(--color-primary-blue);
+    font-size: 0.9rem;
+}
+
+/* --- Sección Configuración y Administración (configuracion.html) --- */
+
+/* Tarjetas principales dentro de la sección (usar ya que el layout es Bootstrap‑like) */
+.container-fluid.py-4 .card {
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    transition:
+        box-shadow 0.18s ease,
+        transform 0.12s ease,
+        border-color 0.18s ease,
+        background-color 0.18s ease;
+}
+
+.container-fluid.py-4 .card:hover {
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, 0.35);
+    background-color: #FFFFFF;
+}
+
+/* Encabezados de tarjeta */
+.container-fluid.py-4 .card-header {
+    background-color: #F9FAFB;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* Tarjeta de Estructura Empresarial sin animación */
+.card-estructura {
+    transition: none;
+}
+
+.card-estructura:hover {
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    transform: none;
+    border-color: var(--color-border);
+    background-color: var(--color-surface);
+}
+
+/* --- Grid de empresas dentro de la tarjeta de Estructura Empresarial (versión mejorada) --- */
+
+.card-estructura-empresas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+/* Cada empresa como tarjetita suave, sin bordes duros */
+.card-estructura-empresas-grid.accordion-flush .accordion-item {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25); /* slate claro con transparencia */
+  background: linear-gradient(
+    135deg,
+    rgba(249, 250, 251, 0.96),
+    rgba(239, 246, 255, 0.94)
+  );
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.12s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.card-estructura-empresas-grid.accordion-flush .accordion-item:hover {
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, 0.35); /* azul app */
+}
+
+/* Encabezado de cada empresa (botón del acordeón) */
+.card-estructura-empresas-grid .accordion-header {
+  margin: 0;
+}
+
+.card-estructura-empresas-grid .accordion-button {
+  background-color: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text-dark);
+  gap: 10px;
+}
+
+.card-estructura-empresas-grid .accordion-button:not(.collapsed) {
+  box-shadow: none;
+  background: linear-gradient(
+    135deg,
+    rgba(239, 246, 255, 0.96),
+    rgba(219, 234, 254, 0.9)
+  );
+}
+
+.accordion-header{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Tipografía dentro del header: nombre + meta */
+.card-estructura-empresas-grid .accordion-button strong {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.card-estructura-empresas-grid .accordion-button small {
+  font-size: 0.78rem;
+  color: var(--color-text-light);
+}
+
+/* Etiquetas de estado (Activa / Inactiva) dentro del header */
+.card-estructura-empresas-grid .accordion-button .badge {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+/* Cuerpo interno de la empresa (sub-empresas, descripción, acciones) */
+.card-estructura-empresas-grid .accordion-collapse {
+  border: none;
+}
+
+.card-estructura-empresas-grid .accordion-body {
+  padding: 14px 16px 16px;
+  background-color: rgba(255, 255, 255, 0.96);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Descripción con estilo más suave */
+.card-estructura-empresas-grid .accordion-body p {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  color: var(--color-text-light);
+}
+
+/* Lista de sub-empresas como “chips” con sombras suaves */
+.card-estructura-empresas-grid .empresa-sub-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card-estructura-empresas-grid .empresa-sub-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(249, 250, 251, 0.9);
+  font-size: 0.78rem;
+  color: var(--color-text-light);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(2px);
+}
+
+/* Estado vacío de sub-empresas */
+.card-estructura-empresas-grid .empresa-sub-list .text-muted {
+  font-size: 0.78rem;
+}
+
+/* Zona de acciones al pie de cada empresa */
+.card-estructura-empresas-grid .empresa-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.35);
+}
+
+/* Los botones ya heredan el estilo global de .container-fluid.py-4 .btn,
+   aquí solo afinamos tamaño y tipografía */
+.card-estructura-empresas-grid .empresa-actions .btn {
+  font-size: 0.78rem;
+  padding: 5px 11px;
+}
+
+
+/* Tabs de navegación (Estructura / Equipo) */
+.container-fluid.py-4 .nav-tabs .nav-link {
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--color-text-light);
+    font-weight: 500;
+    padding: 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition:
+        background-color 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.1s ease,
+        box-shadow 0.18s ease;
+}
+
+.container-fluid.py-4 .nav-tabs .nav-link:hover {
+    background-color: #F3F4F6;
+    color: var(--color-primary-blue);
+    transform: translateY(-1px);
+}
+
+.container-fluid.py-4 .nav-tabs .nav-link.active {
+    background-color: #EFF6FF;
+    color: var(--color-primary-blue);
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+/* Botones principales dentro de Configuración */
+.container-fluid.py-4 .btn {
+    border-radius: 999px;
+    font-size: 0.85rem;
+    padding: 7px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition:
+        background-color 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.1s ease;
+}
+
+/* Primarios azules (crear empresa, invitar usuario, etc.) */
+.container-fluid.py-4 .btn-primary {
+    background-color: var(--color-primary-blue);
+    border-color: var(--color-primary-blue);
+    color: #FFFFFF;
+}
+
+.container-fluid.py-4 .btn-primary:hover {
+    background-color: #1E40AF;
+    border-color: #1E40AF;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Botones “outline” */
+.container-fluid.py-4 .btn-outline-primary {
+    background-color: transparent;
+    border-color: rgba(37, 99, 235, 0.6);
+    color: var(--color-primary-blue);
+}
+
+.container-fluid.py-4 .btn-outline-primary:hover {
+    background-color: #EFF6FF;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Botones secundarios/grises dentro de Configuración */
+.container-fluid.py-4 .btn-secondary {
+    background-color: #4B5563;
+    border-color: #4B5563;
+    color: #E5E7EB;
+}
+
+.container-fluid.py-4 .btn-secondary:hover {
+    background-color: #374151;
+    border-color: #374151;
+    box-shadow: 0 2px 8px rgba(55, 65, 81, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Botones de peligro (eliminar permiso, etc.) */
+.container-fluid.py-4 .btn-danger {
+    background-color: var(--color-danger-red);
+    border-color: var(--color-danger-red);
+    color: #FFFFFF;
+}
+
+.container-fluid.py-4 .btn-danger:hover {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Pequeños botones icónicos en la tabla de accesos (editar / eliminar) */
+.container-fluid.py-4 .btn-icon-accion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background-color: transparent;
+    color: var(--color-text-light);
+    cursor: pointer;
+    transition:
+        background-color 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.1s ease;
+}
+
+.container-fluid.py-4 .btn-icon-accion svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Hover para estos botones icónicos */
+.container-fluid.py-4 .btn-icon-accion:hover {
+    background-color: #EFF6FF;
+    color: var(--color-primary-blue);
+    border-color: rgba(37, 99, 235, 0.5);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+    transform: translateY(-1px);
+}
+
+/* Modales de configuración (usan .modal en lugar de .modal-overlay) */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: none;                /* oculto por defecto */
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.is-open {
+  display: flex;                /* se muestra cuando el JS agrega .is-open */
 }
 
 /* En pantallas muy pequeñas, evitar desbordes */

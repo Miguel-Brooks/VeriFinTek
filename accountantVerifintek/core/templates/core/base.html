@@ -72,7 +72,19 @@
             <i class="fas fa-balance-scale"></i> <span>Consulta de reporte</span>
         </a>
 
+        {% if user.is_staff or user.is_superuser %}
+            <!-- Separador visual sutil -->
+            <li class="nav-item mt-3 mb-1">
+                <hr class="sidebar-divider my-0"> 
+            </li>
 
+            <li class="nav-item">
+                <a class="nav-link {% if 'configuracion' in request.path %}active{% endif %}" href="{% url 'core:configuracion' %}">
+                    <i class="bi bi-sliders me-2"></i> <!-- Icono más limpio para config -->
+                    Configuración
+                </a>
+            </li>
+        {% endif %}
 
         {# Contenedor inferior: usuario + logout #}
         <div class="user-profile">

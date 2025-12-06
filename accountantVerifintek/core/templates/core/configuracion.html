@@ -1,0 +1,615 @@
+<!-- configuracion.html -->
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Encabezado -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-gray-800">Configuración y Administración</h1>
+            <p class="text-muted mb-0">Gestión de estructura corporativa y matriz de accesos.</p>
+        </div>
+    </div>
+
+    <!-- Navegación de Pestañas (Tabs) -->
+    <ul class="nav nav-tabs mb-4" id="configTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="empresa-tab" data-bs-toggle="tab" data-bs-target="#empresa-content" type="button" role="tab" aria-controls="empresa-content" aria-selected="true">
+                <i class="bi bi-building me-2"></i>Estructura Empresarial
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="equipo-tab" data-bs-toggle="tab" data-bs-target="#equipo-content" type="button" role="tab" aria-controls="equipo-content" aria-selected="false">
+                <i class="bi bi-people me-2"></i>Equipo y Permisos
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="configTabsContent">
+        
+        <!-- (A) CONTENIDO ESTRUCTURA EMPRESARIAL -->
+        <div class="tab-pane fade show active" id="empresa-content" role="tabpanel" aria-labelledby="empresa-tab">
+            <div class="card card-estructura shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-primary">Estructura Empresarial</h5>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuevaEmpresa">
+                        <i class="bi bi-plus-lg me-1"></i>Nueva Empresa
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="accordion accordion-flush card-estructura-empresas-grid" id="accordionEmpresas">
+                        {% for empresa in empresas %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading{{ empresa.id }}">
+                                <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ empresa.id }}">
+                                    <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                                        <div>
+                                            <strong>{{ empresa.nombre }}</strong>
+                                            <div class="text-muted small mt-1">
+                                                Capital Base: ${{ empresa.capital_base|intcomma }} | 
+                                                {% if empresa.activa %}
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Activa</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Inactiva</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-muted small fst-italic mt-1">{{ empresa.descripcion|truncatechars:80 }}</div>
+                                        </div>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="collapse{{ empresa.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#accordionEmpresas">
+                                <div class="accordion-body bg-light">
+                                    <!-- Botón Editar Empresa -->
+                                    <div class="d-flex justify-content-end mb-3">
+                                         <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarEmpresa{{ empresa.id }}">
+                                            <i class="bi bi-pencil me-1"></i>Editar Empresa
+                                        </button>
+                                    </div>
+
+                                    <!-- Listado Subempresas -->
+                                    <h6 class="text-uppercase text-muted small fw-bold mb-3 border-bottom pb-2">
+                                        Sub-empresas / Unidades de Negocio
+                                    </h6>
+
+                                    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 mb-3">
+                                        {% for sub in empresa.subempresas.all %}
+                                        <div class="col">
+                                            <div class="list-group-item d-flex justify-content-between align-items-center action-hover h-100">
+                                                <div>
+                                                    <span class="fw-medium text-dark">{{ sub.nombre }}</span>
+                                                    <small class="text-muted d-block">
+                                                        {{ sub.descripcion|default:"Sin descripción" }}
+                                                    </small>
+                                                </div>
+                                                <button class="btn btn-link text-muted p-0 text-decoration-none"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalEditarSub{{ sub.id }}">
+                                                    <span class="icon-left icon-anim">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </span>
+                                                    Editar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Modal Editar Subempresa -->
+                                        <div class="modal fade" id="modalEditarSub{{ sub.id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">
+                                                            <span class="modal-title-icon icon-anim">
+                                                                <i class="bi bi-diagram-3"></i>
+                                                            </span>
+                                                            Editar {{ sub.nombre }}
+                                                        </h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <form method="post" action="{% url 'core:editar_subempresa' sub.id %}">
+                                                        {% csrf_token %}
+                                                        <div class="modal-body">
+                                                            <div class="mb-3">
+                                                                <label class="form-label fw-bold">Nombre</label>
+                                                                <input type="text" name="nombre" class="form-control" value="{{ sub.nombre }}" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label fw-bold">Descripción</label>
+                                                                <textarea name="descripcion" class="form-control" rows="2">{{ sub.descripcion }}</textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% empty %}
+                                        <div class="col">
+                                            <div class="text-center py-3 text-muted small bg-white border rounded h-100">
+                                                No hay sub-empresas registradas.
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+
+                                    <button class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalCrearSub{{ empresa.id }}">
+                                        <span class="icon-left icon-anim">
+                                            <i class="bi bi-plus-circle"></i>
+                                        </span>
+                                        Agregar Sub-empresa
+                                    </button>
+
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Editar Empresa -->
+                        <div class="modal fade" id="modalEditarEmpresa{{ empresa.id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">
+                                            <span class="modal-title-icon icon-anim">
+                                                <i class="bi bi-building"></i>
+                                            </span>
+                                            Editar {{ empresa.nombre }}
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="post" action="{% url 'core:editar_empresa' empresa.id %}">
+                                        {% csrf_token %}
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Nombre de la empresa</label>
+                                                <input
+                                                    type="text"
+                                                    name="nombre"
+                                                    class="form-control"
+                                                    value="{{ empresa.nombre }}"
+                                                    required>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Capital base</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text bg-light border-end-0">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        name="capital_base"
+                                                        class="form-control border-start-0 ps-1 fw-bold text-primary"
+                                                        value="{{ empresa.capital_base|stringformat:'f' }}"
+                                                        required>
+                                                </div>
+                                                <small class="text-muted">
+                                                    Monto base registrado para esta empresa madre.
+                                                </small>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Descripción</label>
+                                                <textarea
+                                                    name="descripcion"
+                                                    class="form-control"
+                                                    rows="3"
+                                                    placeholder="Opcional: describe brevemente la empresa.">{{ empresa.descripcion }}</textarea>
+                                            </div>
+
+                                            <div class="form-check form-switch">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="checkbox"
+                                                    name="activa"
+                                                    id="checkActiva{{ empresa.id }}"
+                                                    {% if empresa.activa %}checked{% endif %}>
+                                                <label class="form-check-label" for="checkActiva{{ empresa.id }}">
+                                                    Empresa activa
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                Cancelar
+                                            </button>
+                                            <button type="submit" class="btn btn-primary">
+                                                Guardar cambios
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Modal Crear Subempresa -->
+                        <div class="modal fade" id="modalCrearSub{{ empresa.id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">
+                                            <span class="modal-title-icon icon-anim">
+                                                <i class="bi bi-diagram-3"></i>
+                                            </span>
+                                            Nueva Sub-empresa en {{ empresa.nombre }}
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="post" action="{% url 'core:crear_subempresa' empresa.id %}">
+                                        {% csrf_token %}
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Nombre</label>
+                                                <input type="text" name="nombre" class="form-control" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Descripción</label>
+                                                <textarea name="descripcion" class="form-control" rows="2"></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary">Crear Sub-empresa</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- (B) CONTENIDO EQUIPO Y PERMISOS -->
+        <div class="tab-pane fade" id="equipo-content" role="tabpanel" aria-labelledby="equipo-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-shield-lock me-2"></i>Listado de Accesos</h5>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalAsignarAcceso">
+                            <i class="bi bi-key me-1"></i>Asignar Acceso
+                        </button>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalInvitarUsuario">
+                            <i class="bi bi-envelope me-1"></i>Invitar Usuario
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Usuario</th>
+                                <th>Rol</th>
+                                <th>Acceso A</th>
+                                <th>Permisos</th>
+                                <th class="text-end pe-4">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for permiso in permisos_asignados %}
+                            <tr>
+                                <td class="ps-4 fw-medium">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2"
+                                            style="width: 32px; height: 32px; font-size: 0.8rem;">
+                                            {{ permiso.usuario.first_name|first|default:permiso.usuario.username|first|upper }}
+                                        </div>
+                                        <div>
+                                            <div>{{ permiso.usuario.get_full_name|default:permiso.usuario.username }}</div>
+                                            <div class="small text-muted">
+                                                {{ permiso.usuario.email }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info text-dark">
+                                        {{ permiso.get_rol_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark">
+                                        {{ permiso.empresa.nombre }}
+                                    </div>
+                                    <small class="text-muted">
+                                        {% if permiso.subempresa %}
+                                            <i class="bi bi-arrow-return-right mx-1"></i>
+                                            {{ permiso.subempresa.nombre }}
+                                        {% else %}
+                                            <i class="bi bi-globe mx-1"></i>
+                                            GLOBAL · Todas
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <span class="badge {% if permiso.puede_leer %}bg-success{% else %}bg-secondary opacity-25{% endif %}" title="Leer">L</span>
+                                        <span class="badge {% if permiso.puede_escribir %}bg-warning text-dark{% else %}bg-secondary opacity-25{% endif %}" title="Escribir">E</span>
+                                        <span class="badge {% if permiso.puede_reportes %}bg-primary{% else %}bg-secondary opacity-25{% endif %}" title="Reportes">R</span>
+                                    </div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary border-0"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalEditarPermiso{{ permiso.id }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button
+                                        class="btn btn-sm btn-outline-danger border-0"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalEliminarPermiso{{ permiso.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    No hay accesos configurados.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODALES GLOBALES -->
+
+<!-- Modal Nueva Empresa Madre -->
+<div class="modal fade" id="modalNuevaEmpresa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <span class="modal-title-icon icon-anim">
+                        <i class="bi bi-building"></i>
+                    </span>
+                    Nueva Empresa Madre
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'core:crear_empresa' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre</label>
+                        <input type="text" name="nombre" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Descripción</label>
+                        <textarea name="descripcion" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Capital inicial</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0">$</span>
+                            <input type="number" step="0.01" name="capital_base" class="form-control border-start-0 ps-1 fw-bold text-primary" placeholder="0.00" required>
+                        </div>
+                        <small class="text-muted">Capital inicial registrado de la empresa.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Empresa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Invitar Usuario -->
+<div class="modal fade" id="modalInvitarUsuario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <span class="modal-title-icon icon-anim">
+                        <i class="bi bi-person-plus"></i>
+                    </span>
+                    Invitar Nuevo Usuario
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'core:invitar_usuario' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold">Nombre(s)</label>
+                            <input type="text" name="first_name" class="form-control" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold">Apellidos</label>
+                            <input type="text" name="last_name" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Correo Electrónico</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
+                            <input type="email" name="email" class="form-control" placeholder="usuario@empresa.com" required>
+                        </div>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>Se generará una contraseña temporal. El usuario no tendrá acceso a ninguna empresa hasta que se le asigne en "Asignar Acceso".
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Enviar Invitación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Asignar Acceso -->
+<div class="modal fade" id="modalAsignarAcceso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <span class="modal-title-icon icon-anim">
+                        <i class="bi bi-key"></i>
+                    </span>
+                    Configurar Acceso
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'core:asignar_permiso' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Usuario</label>
+                        {{ form_permiso.usuario }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Empresa</label>
+                        {{ form_permiso.empresa }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Subempresa (Opcional)</label>
+                        {{ form_permiso.subempresa }}
+                        <div class="form-text small">Si se deja vacío, tendrá acceso a toda la empresa.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Rol</label>
+                        {{ form_permiso.rol }}
+                    </div>
+                    
+                    <div class="row g-2 bg-light p-3 rounded border">
+                        <label class="form-label fw-bold mb-1 w-100">Permisos Específicos</label>
+                        <div class="col-4">
+                            <div class="form-check">
+                                {{ form_permiso.puede_leer }}
+                                <label class="form-check-label" for="{{ form_permiso.puede_leer.id_for_label }}">Leer</label>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="form-check">
+                                {{ form_permiso.puede_escribir }}
+                                <label class="form-check-label" for="{{ form_permiso.puede_escribir.id_for_label }}">Escribir</label>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="form-check">
+                                {{ form_permiso.puede_reportes }}
+                                <label class="form-check-label" for="{{ form_permiso.puede_reportes.id_for_label }}">Reportes</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Permisos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- JS para manejar la lógica de apertura y cierre de modales -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 1) Abrir modales al hacer click en botones con data-bs-toggle="modal"
+    const openButtons = document.querySelectorAll('[data-bs-toggle="modal"][data-bs-target]');
+
+    openButtons.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const targetSelector = btn.getAttribute('data-bs-target');
+            if (!targetSelector) return;
+
+            const modal = document.querySelector(targetSelector);
+            if (!modal) return;
+
+            modal.classList.add('is-open');
+        });
+    });
+
+    // 2) Cerrar modales con botones data-bs-dismiss="modal" o .btn-close,
+    //    con click fuera del contenido y con tecla ESC.
+    const modals = document.querySelectorAll('.modal');
+
+    modals.forEach(function (modal) {
+        function cerrarModal() {
+            modal.classList.remove('is-open');
+        }
+
+        // Botones de cierre dentro del modal
+        const closeButtons = modal.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+        closeButtons.forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                cerrarModal();
+            });
+        });
+
+        // Click en el fondo (fuera de .modal-dialog) cierra el modal
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+                cerrarModal();
+            }
+        });
+    });
+
+    // 3) Tecla ESC cierra cualquier modal abierto
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.is-open').forEach(function (modal) {
+                modal.classList.remove('is-open');
+            });
+        }
+    });
+});
+</script>
+
+
+<!-- JS para el botón de Equipo y permisos -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Tabs: Estructura Empresarial / Equipo y Permisos
+  const tabs  = document.querySelectorAll('#configTabs .nav-link');
+  const panes = document.querySelectorAll('#configTabsContent .tab-pane');
+
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      const targetSelector = btn.getAttribute('data-bs-target');
+      if (!targetSelector) return;
+
+      // Desactivar todas las pestañas y contenidos
+      tabs.forEach(function (t) {
+        t.classList.remove('active');
+      });
+      panes.forEach(function (p) {
+        p.classList.remove('show', 'active');
+      });
+
+      // Activar la pestaña clicada
+      btn.classList.add('active');
+
+      // Mostrar el contenido correspondiente
+      const pane = document.querySelector(targetSelector);
+      if (pane) {
+        pane.classList.add('show', 'active');
+      }
+    });
+  });
+});
+</script>
+
+{% endblock %}
