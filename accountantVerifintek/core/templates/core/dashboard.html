@@ -120,7 +120,7 @@
             </p>
         {% else %}
             <div class="chart-container">
-                <vas id="charttFlujoCaja"></canvas>
+                <canvas id="chartFlujoCaja"></canvas>
             </div>
         {% endif %}
     </div>
@@ -133,7 +133,7 @@
             </p>
         {% else %}
             <div class="chart-container">
-                <vas id="charttConceptos"></canvas>
+                <canvas id="chartConceptos"></canvas>
             </div>
         {% endif %}
     </div>
@@ -167,9 +167,7 @@
                                 <tr>
                                     <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
                                     <td>
-                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}">
-                                            {{ p.movimiento.folio|default:"—" }}
-                                        </a>
+                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}">{{ p.movimiento.folio }}</a>
                                     </td>
                                     <td>{{ p.movimiento.concepto.nombre }}</td>
                                     <td>
@@ -181,18 +179,12 @@
                                     </td>
                                     <td>${{ p.monto|floatformat:2|intcomma }}</td>
                                     <td>
-                                        <span class="status-tag"
-                                              style="background-color: {{ p.estado_color }}22;
-                                                     color: {{ p.estado_color }};
-                                                     border-radius: 999px;
-                                                     padding: 2px 10px;
-                                                     font-size: 0.8rem;">
+                                        <span class="status-tag" style="background-color: {{ p.estado_color }}22; color: {{ p.estado_color }};">
                                             {{ p.estado_label }}
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="{% url 'core:pago_editar' p.movimiento.id p.id %}"
-                                           class="btn btn-small">
+                                        <a href="{% url 'core:pago_editar' p.movimiento.id p.id %}" class="btn btn-small">
                                             Registrar pago
                                         </a>
                                     </td>
@@ -204,69 +196,6 @@
             {% else %}
                 <p style="color: var(--color-text-light); margin-top:8px;">
                     No hay pagos en el rango y filtros seleccionados.
-                </p>
-            {% endif %}
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Cuentas por cobrar (cartera)</h3>
-        {% if not subempresa_actual %}
-            <p style="color: var(--color-text-light); margin-top:8px;">
-                Selecciona una sub-empresa para ver sus cuentas por cobrar.
-            </p>
-        {% else %}
-            {% if cxc_pagos %}
-                <div class="table-wrapper">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Días de retraso</th>
-                                <th>Fecha venc.</th>
-                                <th>Folio</th>
-                                <th>Cliente / Ref</th>
-                                <th>Monto</th>
-                                <th>Progreso</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for p in cxc_pagos %}
-                                <tr>
-                                    <td>
-                                        {% if p.dias_retraso < 0 %}
-                                            Por vencer ({{ p.dias_retraso_abs }} días)
-                                        {% elif p.dias_retraso == 0 %}
-                                            Hoy
-                                        {% else %}
-                                            {{ p.dias_retraso }} días
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ p.fecha_vencimiento|date:"d/m/Y" }}</td>
-                                    <td>
-                                        <a href="{% url 'core:movimiento_detalle' p.movimiento.id %}">
-                                            {{ p.movimiento.folio|default:"—" }}
-                                        </a>
-                                    </td>
-                                    <td>{{ p.movimiento.descripcion|default:"—" }}</td>
-                                    <td>${{ p.monto|floatformat:2|intcomma }}</td>
-                                    <td>
-                                        Pago {{ p.numero_pago }} de {{ p.movimiento.numero_pagos }}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'core:pago_editar' p.movimiento.id p.id %}"
-                                           class="btn btn-small">
-                                            Registrar cobro
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p style="color: var(--color-text-light); margin-top:8px;">
-                    No hay cuentas por cobrar pendientes en el rango seleccionado.
                 </p>
             {% endif %}
         {% endif %}
@@ -296,23 +225,12 @@
                                 <td>{{ row.subempresa.nombre }}</td>
                                 <td>${{ row.ingresos_cobrados|floatformat:2|intcomma }}</td>
                                 <td>${{ row.egresos_pagados|floatformat:2|intcomma }}</td>
-                                <td
-                                    {% if row.flujo_neto_real > 0 %}
-                                        style="color:#16A34A;"
-                                    {% elif row.flujo_neto_real < 0 %}
-                                        style="color:#DC2626;"
-                                    {% endif %}
-                                >
+                                <td style="{% if row.flujo_neto_real > 0 %}color:#16A34A;{% elif row.flujo_neto_real < 0 %}color:#DC2626;{% endif %}">
                                     ${{ row.flujo_neto_real|floatformat:2|intcomma }}
                                 </td>
                                 <td>${{ row.deuda_pendiente|floatformat:2|intcomma }}</td>
                                 <td>
-                                    <span class="status-tag"
-                                          style="background-color: {{ row.salud_color }}22;
-                                                 color: {{ row.salud_color }};
-                                                 border-radius: 999px;
-                                                 padding: 2px 10px;
-                                                 font-size: 0.8rem;">
+                                    <span class="status-tag" style="background-color: {{ row.salud_color }}22; color: {{ row.salud_color }};">
                                         {{ row.salud_label }}
                                     </span>
                                 </td>
@@ -361,7 +279,6 @@
     </div>
 </div>
 
-{# ------------------ SCRIPTS DE GRÁFICAS (Chart.js) ------------------ #}
 {% if flujo_caja_pagos or desglose_conceptos or reporte_subempresas %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
