@@ -299,6 +299,77 @@
                 </div>
             </div>
 
+            <!-- Movimientos detallados de la sub-empresa -->
+            <div class="card" style="margin-top: 30px;">
+                <h3>Movimientos detallados de la sub-empresa</h3>
+                <p style="color: var(--color-text-light); margin-bottom: 8px;">
+                    Cada fila representa un movimiento del período, con su avance de pagos.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Fecha registro</th>
+                            <th>Fecha inicio</th>
+                            <th>Folio</th>
+                            <th>Tipo</th>
+                            <th>Concepto</th>
+                            <th>Estado (workflow)</th>
+                            <th>Estatus pagos</th>
+                            <th>Monto total</th>
+                            <th>Monto pagado</th>
+                            <th>Monto pendiente</th>
+                            <th>Frecuencia / # pagos</th>
+                            <th>Capturado por</th>
+                            <th>Detalle</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if movimientos_detalle %}
+                            {% for mov in movimientos_detalle %}
+                                <tr>
+                                    <td>{{ mov.fecha_registro|date:"d/m/Y" }}</td>
+                                    <td>{{ mov.fecha_inicio|date:"d/m/Y" }}</td>
+                                    <td>{{ mov.folio|default:"—" }}</td>
+                                    <td>{{ mov.get_tipo_display }}</td>
+                                    <td>{{ mov.concepto.nombre }}</td>
+                                    <td>{{ mov.get_estado_display }}</td>
+                                    <td>
+                                        <span class="estatus-label {{ mov.estatus_css }}">
+                                            {{ mov.estatus_label }}
+                                        </span>
+                                    </td>
+                                    <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
+                                    <td>${{ mov.total_pagado|floatformat:2|intcomma }}</td>
+                                    <td>${{ mov.total_pendiente|floatformat:2|intcomma }}</td>
+                                    <td>{{ mov.get_frecuencia_pago_display }} / {{ mov.numero_pagos }}</td>
+                                    <td>
+                                        {% if mov.usuario_captura %}
+                                            {{ mov.usuario_captura.get_username }}
+                                        {% else %}
+                                            –
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:movimiento_detalle' mov.id %}"
+                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
+                                            Ver detalle
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="13" style="text-align:center; color:var(--color-text-light);">
+                                    No hay movimientos en el período seleccionado.
+                                </td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Desglose por concepto -->
             <div class="card" style="margin-top: 25px;">
                 <h3>Movimientos por concepto (período seleccionado)</h3>
@@ -526,77 +597,6 @@
                             <tr>
                                 <td colspan="4" style="text-align:center; color:var(--color-text-light);">
                                     No hay pagos futuros suficientes para proyectar el flujo.
-                                </td>
-                            </tr>
-                        {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Movimientos detallados de la sub-empresa -->
-            <div class="card" style="margin-top: 30px;">
-                <h3>Movimientos detallados de la sub-empresa</h3>
-                <p style="color: var(--color-text-light); margin-bottom: 8px;">
-                    Cada fila representa un movimiento del período, con su avance de pagos.
-                </p>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>Fecha registro</th>
-                            <th>Fecha inicio</th>
-                            <th>Folio</th>
-                            <th>Tipo</th>
-                            <th>Concepto</th>
-                            <th>Estado (workflow)</th>
-                            <th>Estatus pagos</th>
-                            <th>Monto total</th>
-                            <th>Monto pagado</th>
-                            <th>Monto pendiente</th>
-                            <th>Frecuencia / # pagos</th>
-                            <th>Capturado por</th>
-                            <th>Detalle</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% if movimientos_detalle %}
-                            {% for mov in movimientos_detalle %}
-                                <tr>
-                                    <td>{{ mov.fecha_registro|date:"d/m/Y" }}</td>
-                                    <td>{{ mov.fecha_inicio|date:"d/m/Y" }}</td>
-                                    <td>{{ mov.folio|default:"—" }}</td>
-                                    <td>{{ mov.get_tipo_display }}</td>
-                                    <td>{{ mov.concepto.nombre }}</td>
-                                    <td>{{ mov.get_estado_display }}</td>
-                                    <td>
-                                        <span class="estatus-label {{ mov.estatus_css }}">
-                                            {{ mov.estatus_label }}
-                                        </span>
-                                    </td>
-                                    <td>${{ mov.monto_total|floatformat:2|intcomma }}</td>
-                                    <td>${{ mov.total_pagado|floatformat:2|intcomma }}</td>
-                                    <td>${{ mov.total_pendiente|floatformat:2|intcomma }}</td>
-                                    <td>{{ mov.get_frecuencia_pago_display }} / {{ mov.numero_pagos }}</td>
-                                    <td>
-                                        {% if mov.usuario_captura %}
-                                            {{ mov.usuario_captura.get_username }}
-                                        {% else %}
-                                            –
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'core:movimiento_detalle' mov.id %}"
-                                           class="btn" style="padding:4px 8px; font-size:0.8rem;">
-                                            Ver detalle
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="13" style="text-align:center; color:var(--color-text-light);">
-                                    No hay movimientos en el período seleccionado.
                                 </td>
                             </tr>
                         {% endif %}

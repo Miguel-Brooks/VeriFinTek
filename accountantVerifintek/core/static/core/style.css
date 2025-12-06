@@ -1118,6 +1118,41 @@ th .tabla-sort:hover {
     border-radius: 999px;
 }
 
+/* Contenedores operativos afectados por el filtro de fechas */
+.balance-op-dynamic {
+  position: relative;
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18);
+  background: linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.06),
+    rgba(16, 185, 129, 0.03)
+  );
+}
+
+/* Etiqueta flotante que indica que el bloque está filtrado por fechas */
+.balance-op-dynamic::before {
+  content: "Filtrado por rango de fechas";
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Estado de carga mientras se actualizan los datos por AJAX */
+[data-balance-op-dynamic-wrapper="1"].is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
 /* En pantallas muy pequeñas, evitar desbordes */
 @media (max-width: 600px) {
     .main-content {
